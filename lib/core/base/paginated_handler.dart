@@ -1,0 +1,173 @@
+// lib/core/base/paginated_handler.dart
+//
+// 作用：分页列表处理器，封装 refresh/loadMore 的通用逻辑。
+//
+// 使用场景：任何需要下拉刷新 + 上拉加载更多的列表页面。
+//
+// 使用方式：
+// ```dart
+// class MyListNotifier extends Notifier<MyListState> {
+//   late final _paginator = PaginatedListHandler<ItemModel>();
+//
+//   @override
+//   MyListState build() {
+//     ref.onDispose(() => _paginator.dispose());
+//     return MyListState();
+//   }
+//
+//   Future<void> refresh() async {
+//     await _paginator.refresh(
+//       fetchPage: (page) => ref.read(repoProvider).fetchItems(page: page),
+//       currentState: state,
+//       pageSize: 20,
+//       onStateChanged: (s) => state = s,
+//     );
+//   }
+//
+//   Future<void> loadMore() async {
+//     await _paginator.loadMore(
+//       fetchPage: (page) => ref.read(repoProvider).fetchItems(page: page),
+//       currentState: state,
+//       pageSize: 20,
+//       onStateChanged: (s) => state = s,
+//     );
+//   }
+// }
+// ```
+
+import 'package:dio/dio.dart';
+
+import '../network/api_exception.dart';
+import 'view_state.dart';
+
+/// 分页列表状态。
+///
+/// 包含 ViewState（用于页面级的 loading/error/empty 展示）
+/// 和分页信息（page、hasMore、isRefreshing、isLoadingMore）。
+class PaginatedListState<T> {
+  const PaginatedListState({
+    this.viewState = ViewState.idle,
+    this.errorMessage = '',
+    this.items = const [],
+    this.page = 1,
+    this.hasMore = true,
+    this.isRefreshing = false,
+    this.isLoadingMore = false,
+  });
+
+  final ViewState viewState;
+  final String errorMessage;
+  final List<T> items;
+  final int page;
+  final bool hasMore;
+  final bool isRefreshing;
+  final bool isLoadingMore;
+
+  PaginatedListState<T> copyWith({
+    ViewState? viewState,
+    String? errorMessage,
+    List<T>? items,
+    int? page,
+    bool? hasMore,
+    bool? isRefreshing,
+    bool? isLoadingMore,
+  }) {
+    return PaginatedListState<T>(
+      viewState: viewState ?? this.viewState,
+      errorMessage: errorMessage ?? this.errorMessage,
+      items: items ?? this.items,
+      page: page ?? this.page,
+      hasMore: hasMore ?? this.hasMore,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+    );
+  }
+}
+
+/// 分页列表处理器。
+///
+/// 封装了下拉刷新、上拉加载更多、请求防抖、CancelToken 管理。
+/// 每个分页列表 Notifier 在 build() 中创建一个实例。
+class PaginatedListHandler<T> {
+  bool _isRequesting = false;
+  final CancelToken cancelToken = CancelToken();
+
+  /// 下拉刷新：重置为第 1 页，清空旧数据，重新加载。
+  ///
+  /// [fetchPage]：获取指定页数据的闭包
+  /// [currentState]：当前状态（用于判断 hasMore、page 等）
+  /// [onStateChanged]：状态变更回调（通常直接赋值 state = newState）
+  /// [pageSize]：每页条数，默认 20
+  Future<void> refresh({
+    required Future<List<T>> Function(int page) fetchPage,
+    required PaginatedListState<T> currentState,
+    required void Function(PaginatedListState<T> state) onStateChanged,
+    int pageSize = 20,
+  }) async {
+    if (_isRequesting || cancelToken.isCancelled) return;
+
+    _isRequesting = true;
+    onStateChanged(currentState.copyWith(
+      viewState: ViewState.loading,
+      isRefreshing: true,
+    ));
+
+    try {
+      final items = await fetchPage(1);
+      final hasMore = items.length >= pageSize;
+      onStateChanged(currentState.copyWith(
+        viewState: items.isEmpty ? ViewState.empty : ViewState.success,
+        items: items,
+        page: 1,
+        hasMore: hasMore,
+        isRefreshing: false,
+      ));
+    } catch (e) {
+      onStateChanged(currentState.copyWith(
+        viewState: currentState.items.isEmpty
+            ? ViewState.error
+            : ViewState.success, // 有旧数据时不覆盖为 error
+        errorMessage: e is BusinessException ? e.userMessage : e.toString(),
+        isRefreshing: false,
+      ));
+    } finally {
+      _isRequesting = false;
+    }
+  }
+
+  /// 上拉加载更多：追加下一页数据。
+  Future<void> loadMore({
+    required Future<List<T>> Function(int page) fetchPage,
+    required PaginatedListState<T> currentState,
+    required void Function(PaginatedListState<T> state) onStateChanged,
+    int pageSize = 20,
+  }) async {
+    if (_isRequesting || cancelToken.isCancelled) return;
+    if (!currentState.hasMore || currentState.isLoadingMore) return;
+
+    _isRequesting = true;
+    final nextPage = currentState.page + 1;
+    onStateChanged(currentState.copyWith(isLoadingMore: true));
+
+    try {
+      final newItems = await fetchPage(nextPage);
+      final hasMore = newItems.length >= pageSize;
+      onStateChanged(currentState.copyWith(
+        items: [...currentState.items, ...newItems],
+        page: nextPage,
+        hasMore: hasMore,
+        isLoadingMore: false,
+      ));
+    } catch (e) {
+      onStateChanged(currentState.copyWith(
+        errorMessage: e is BusinessException ? e.userMessage : e.toString(),
+        isLoadingMore: false,
+      ));
+    } finally {
+      _isRequesting = false;
+    }
+  }
+
+  /// 释放资源。
+  void dispose() => cancelToken.cancel();
+}
