@@ -20,7 +20,7 @@ class AppDatabase {
   const AppDatabase._();
 
   /// 数据库文件名。
-  static const String databaseName = 'provider_mvvm.db';
+  static const String databaseName = 'riverpod_mvvm.db';
 
   /// 当前数据库实例。
   static Database? _database;

@@ -1,4 +1,4 @@
-package com.example.provider_mvvm;
+package com.eszhanghome.riverpod_mvvm;
 
 import io.flutter.embedding.android.FlutterActivity;
 

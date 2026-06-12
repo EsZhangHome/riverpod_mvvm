@@ -4,7 +4,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:permission_handler/permission_handler.dart' as handler;
-import 'package:provider_mvvm/core/permission/permission_service.dart';
+import 'package:riverpod_mvvm/core/permission/permission_service.dart';
 
 void main() {
   group('PermissionHandlerService', () {

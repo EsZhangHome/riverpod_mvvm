@@ -4,8 +4,8 @@
 // 这里用测试锁住基础表结构，避免后续改名导致缓存读写失效。
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider_mvvm/core/database/database_migrations.dart';
-import 'package:provider_mvvm/core/database/database_tables.dart';
+import 'package:riverpod_mvvm/core/database/database_migrations.dart';
+import 'package:riverpod_mvvm/core/database/database_tables.dart';
 
 void main() {
   group('DatabaseTables', () {

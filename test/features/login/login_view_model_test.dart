@@ -5,12 +5,12 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider_mvvm/core/providers/repositories.dart';
-import 'package:provider_mvvm/features/login/model/login_request.dart';
-import 'package:provider_mvvm/features/login/model/login_response.dart';
-import 'package:provider_mvvm/features/login/repository/login_repository.dart';
-import 'package:provider_mvvm/features/login/view_model/login_view_model.dart';
-import 'package:provider_mvvm/shared/models/user_model.dart';
+import 'package:riverpod_mvvm/core/providers/repositories.dart';
+import 'package:riverpod_mvvm/features/login/model/login_request.dart';
+import 'package:riverpod_mvvm/features/login/model/login_response.dart';
+import 'package:riverpod_mvvm/features/login/repository/login_repository.dart';
+import 'package:riverpod_mvvm/features/login/view_model/login_view_model.dart';
+import 'package:riverpod_mvvm/shared/models/user_model.dart';
 
 class FakeLoginRepository implements LoginRepository {
   @override

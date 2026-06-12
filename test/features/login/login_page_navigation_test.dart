@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider_mvvm/app.dart';
-import 'package:provider_mvvm/core/storage/local_storage.dart';
+import 'package:riverpod_mvvm/app.dart';
+import 'package:riverpod_mvvm/core/storage/local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

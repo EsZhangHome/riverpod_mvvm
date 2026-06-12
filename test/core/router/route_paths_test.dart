@@ -1,6 +1,6 @@
 // test/core/router/route_paths_test.dart
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider_mvvm/core/router/route_paths.dart';
+import 'package:riverpod_mvvm/core/router/route_paths.dart';
 
 void main() {
   test('main tab route paths are centralized', () {

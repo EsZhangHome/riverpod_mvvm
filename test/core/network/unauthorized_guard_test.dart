@@ -1,6 +1,6 @@
 // test/core/network/unauthorized_guard_test.dart
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider_mvvm/core/network/dio_interceptor.dart';
+import 'package:riverpod_mvvm/core/network/dio_interceptor.dart';
 
 void main() {
   test('unauthorized guard only handles one unauthorized event at a time', () {

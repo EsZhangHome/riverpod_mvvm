@@ -5,10 +5,10 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider_mvvm/core/providers/repositories.dart';
-import 'package:provider_mvvm/features/home/model/home_banner.dart';
-import 'package:provider_mvvm/features/home/repository/home_repository.dart';
-import 'package:provider_mvvm/features/home/view_model/home_view_model.dart';
+import 'package:riverpod_mvvm/core/providers/repositories.dart';
+import 'package:riverpod_mvvm/features/home/model/home_banner.dart';
+import 'package:riverpod_mvvm/features/home/repository/home_repository.dart';
+import 'package:riverpod_mvvm/features/home/view_model/home_view_model.dart';
 
 class FakeHomeRepository implements HomeRepository {
   @override

@@ -4,9 +4,9 @@
 // 后续新增 Model 时，可以参考这些写法。
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider_mvvm/features/home/model/home_banner.dart';
-import 'package:provider_mvvm/features/login/model/login_request.dart';
-import 'package:provider_mvvm/shared/models/user_model.dart';
+import 'package:riverpod_mvvm/features/home/model/home_banner.dart';
+import 'package:riverpod_mvvm/features/login/model/login_request.dart';
+import 'package:riverpod_mvvm/shared/models/user_model.dart';
 
 void main() {
   group('json serializable models', () {

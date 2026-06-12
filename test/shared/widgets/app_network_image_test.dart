@@ -4,7 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider_mvvm/shared/widgets/app_network_image.dart';
+import 'package:riverpod_mvvm/shared/widgets/app_network_image.dart';
 
 void main() {
   testWidgets('app network image shows fallback when url is empty', (

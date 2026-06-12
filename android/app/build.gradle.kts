@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.provider_mvvm"
+    namespace = "com.eszhanghome.riverpod_mvvm"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -14,7 +14,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.provider_mvvm"
+        applicationId = "com.eszhanghome.riverpod_mvvm"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

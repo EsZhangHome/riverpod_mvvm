@@ -4,7 +4,7 @@
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider_mvvm/core/network/network_status_service.dart';
+import 'package:riverpod_mvvm/core/network/network_status_service.dart';
 
 void main() {
   group('ConnectivityNetworkStatusService', () {

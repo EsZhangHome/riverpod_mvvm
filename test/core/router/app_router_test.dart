@@ -4,8 +4,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider_mvvm/core/router/app_router.dart';
-import 'package:provider_mvvm/core/router/route_guard.dart';
+import 'package:riverpod_mvvm/core/router/app_router.dart';
+import 'package:riverpod_mvvm/core/router/route_guard.dart';
 
 void main() {
   test('app router keeps the same GoRouter instance', () {
