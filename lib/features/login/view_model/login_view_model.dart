@@ -47,7 +47,7 @@ class LoginState {
 
 // ==================== Notifier ====================
 
-class LoginNotifier extends AutoDisposeNotifier<LoginState> {
+class LoginNotifier extends Notifier<LoginState> {
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -79,7 +79,7 @@ class LoginNotifier extends AutoDisposeNotifier<LoginState> {
           state = state.copyWith(viewState: ViewState.error, errorMessage: msg),
     );
 
-    if (response == null) return false;
+    if (!ref.mounted || response == null) return false;
 
     state = state.copyWith(token: response.token, user: response.user);
     return true;
@@ -88,6 +88,6 @@ class LoginNotifier extends AutoDisposeNotifier<LoginState> {
 
 // ==================== Provider ====================
 
-final loginProvider = AutoDisposeNotifierProvider<LoginNotifier, LoginState>(
+final loginProvider = NotifierProvider.autoDispose<LoginNotifier, LoginState>(
   LoginNotifier.new,
 );

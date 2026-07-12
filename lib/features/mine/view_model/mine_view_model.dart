@@ -38,7 +38,7 @@ class MineState {
 
 // ==================== Notifier ====================
 
-class MineNotifier extends AutoDisposeNotifier<MineState> {
+class MineNotifier extends Notifier<MineState> {
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -67,7 +67,7 @@ class MineNotifier extends AutoDisposeNotifier<MineState> {
           state = state.copyWith(viewState: ViewState.error, errorMessage: msg),
     );
 
-    if (loadedUser != null) {
+    if (ref.mounted && loadedUser != null) {
       state = state.copyWith(user: loadedUser);
     }
   }
@@ -75,6 +75,6 @@ class MineNotifier extends AutoDisposeNotifier<MineState> {
 
 // ==================== Provider ====================
 
-final mineProvider = AutoDisposeNotifierProvider<MineNotifier, MineState>(
+final mineProvider = NotifierProvider.autoDispose<MineNotifier, MineState>(
   MineNotifier.new,
 );

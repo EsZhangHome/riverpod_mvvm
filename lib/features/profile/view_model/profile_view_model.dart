@@ -39,7 +39,7 @@ class ProfileState {
 
 // ==================== Notifier ====================
 
-class ProfileNotifier extends AutoDisposeNotifier<ProfileState> {
+class ProfileNotifier extends Notifier<ProfileState> {
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -67,7 +67,7 @@ class ProfileNotifier extends AutoDisposeNotifier<ProfileState> {
           state = state.copyWith(viewState: ViewState.error, errorMessage: msg),
     );
 
-    if (profile != null) {
+    if (ref.mounted && profile != null) {
       state = state.copyWith(user: profile);
     }
   }
@@ -76,6 +76,6 @@ class ProfileNotifier extends AutoDisposeNotifier<ProfileState> {
 // ==================== Provider ====================
 
 final profileProvider =
-    AutoDisposeNotifierProvider<ProfileNotifier, ProfileState>(
+    NotifierProvider.autoDispose<ProfileNotifier, ProfileState>(
       ProfileNotifier.new,
     );

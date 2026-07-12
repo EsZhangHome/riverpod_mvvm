@@ -35,7 +35,7 @@ class CommunityState {
 
 // ==================== Notifier ====================
 
-class CommunityNotifier extends AutoDisposeNotifier<CommunityState> {
+class CommunityNotifier extends Notifier<CommunityState> {
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -62,7 +62,7 @@ class CommunityNotifier extends AutoDisposeNotifier<CommunityState> {
       isEmpty: (data) => data.isEmpty,
     );
 
-    if (posts != null) {
+    if (ref.mounted && posts != null) {
       state = state.copyWith(posts: posts);
     }
   }
@@ -71,6 +71,6 @@ class CommunityNotifier extends AutoDisposeNotifier<CommunityState> {
 // ==================== Provider ====================
 
 final communityProvider =
-    AutoDisposeNotifierProvider<CommunityNotifier, CommunityState>(
+    NotifierProvider.autoDispose<CommunityNotifier, CommunityState>(
       CommunityNotifier.new,
     );

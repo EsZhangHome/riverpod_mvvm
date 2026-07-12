@@ -43,7 +43,7 @@ class HomeState {
 
 // ==================== Notifier ====================
 
-class HomeNotifier extends AutoDisposeNotifier<HomeState> {
+class HomeNotifier extends Notifier<HomeState> {
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -64,7 +64,7 @@ class HomeNotifier extends AutoDisposeNotifier<HomeState> {
           state = state.copyWith(viewState: ViewState.error, errorMessage: msg),
       isEmpty: (data) => data.isEmpty,
     );
-    if (banners != null) {
+    if (ref.mounted && banners != null) {
       state = state.copyWith(banners: banners);
     }
   }
@@ -72,6 +72,6 @@ class HomeNotifier extends AutoDisposeNotifier<HomeState> {
 
 // ==================== Provider ====================
 
-final homeProvider = AutoDisposeNotifierProvider<HomeNotifier, HomeState>(
+final homeProvider = NotifierProvider.autoDispose<HomeNotifier, HomeState>(
   HomeNotifier.new,
 );
