@@ -27,18 +27,19 @@ class ProfileState {
     ViewState? viewState,
     String? errorMessage,
     UserModel? user,
+    bool clearUser = false,
   }) {
     return ProfileState(
       viewState: viewState ?? this.viewState,
       errorMessage: errorMessage ?? this.errorMessage,
-      user: user ?? this.user,
+      user: clearUser ? null : user ?? this.user,
     );
   }
 }
 
 // ==================== Notifier ====================
 
-class ProfileNotifier extends Notifier<ProfileState> {
+class ProfileNotifier extends AutoDisposeNotifier<ProfileState> {
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -57,16 +58,13 @@ class ProfileNotifier extends Notifier<ProfileState> {
     }
 
     final profile = await _handler.execute<UserModel>(
-      request: () => ref.read(profileRepositoryProvider).fetchProfile(
-            currentUser,
-            cancelToken: _handler.cancelToken,
-          ),
+      request: () => ref
+          .read(profileRepositoryProvider)
+          .fetchProfile(currentUser, cancelToken: _handler.cancelToken),
       onLoading: () => state = state.copyWith(viewState: ViewState.loading),
       onSuccess: () => state = state.copyWith(viewState: ViewState.success),
-      onError: (msg) => state = state.copyWith(
-        viewState: ViewState.error,
-        errorMessage: msg,
-      ),
+      onError: (msg) =>
+          state = state.copyWith(viewState: ViewState.error, errorMessage: msg),
     );
 
     if (profile != null) {
@@ -77,6 +75,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
 
 // ==================== Provider ====================
 
-final profileProvider = NotifierProvider<ProfileNotifier, ProfileState>(
-  ProfileNotifier.new,
-);
+final profileProvider =
+    AutoDisposeNotifierProvider<ProfileNotifier, ProfileState>(
+      ProfileNotifier.new,
+    );

@@ -70,8 +70,7 @@ class AuthRouteGuard implements RouteGuard {
 
     final isLoginRoute = state.matchedLocation == RoutePaths.login;
     final isSplashRoute = state.matchedLocation == RoutePaths.splash;
-    final isProtectedRoute =
-        _protectedRoutes.contains(state.matchedLocation);
+    final isProtectedRoute = _protectedRoutes.contains(state.matchedLocation);
 
     // 规则 0：恢复登录态期间停留在启动页
     if (authState.isRestoringSession) {

@@ -57,6 +57,7 @@ class AsyncRequestHandler {
 
   /// 是否正在执行请求（防抖标记）。
   bool _isRequesting = false;
+  bool _isDisposed = false;
 
   // ==================== 公开属性 ====================
 
@@ -89,7 +90,7 @@ class AsyncRequestHandler {
     bool Function(T data)? isEmpty,
   }) async {
     // ---- 步骤 1：请求防抖检查 ----
-    if (_isRequesting) {
+    if (_isRequesting || _isDisposed) {
       return null;
     }
 
@@ -106,6 +107,11 @@ class AsyncRequestHandler {
       // ---- 步骤 4：执行真正的异步请求 ----
       final data = await request();
 
+      // Provider 可能在 await 期间被释放。此时丢弃结果，禁止回写状态。
+      if (_isDisposed || cancelToken.isCancelled) {
+        return null;
+      }
+
       // ---- 步骤 5：根据结果判断 success 还是 empty ----
       if (isEmpty != null && isEmpty(data)) {
         onEmpty?.call();
@@ -115,10 +121,17 @@ class AsyncRequestHandler {
       return data;
     } catch (error) {
       // ---- 步骤 6：错误处理 ----
+      if (_isDisposed ||
+          cancelToken.isCancelled ||
+          (error is ApiException && error.isCancelled)) {
+        return null;
+      }
       if (error is BusinessException) {
         onError(error.userMessage);
+      } else if (error is ApiException) {
+        onError(error.message);
       } else {
-        onError(error.toString());
+        onError('请求失败，请稍后重试');
       }
       return null;
     } finally {
@@ -127,17 +140,14 @@ class AsyncRequestHandler {
     }
   }
 
-  /// 强制重置请求防抖标记。
-  ///
-  /// 使用场景：快速切换筛选条件时需要丢弃当前请求结果。
-  void forceReset() {
-    _isRequesting = false;
-  }
-
   // ==================== 生命周期 ====================
 
   /// 释放资源，取消所有使用此 token 的 Dio 请求。
   void dispose() {
-    cancelToken.cancel('handler disposed');
+    if (_isDisposed) return;
+    _isDisposed = true;
+    if (!cancelToken.isCancelled) {
+      cancelToken.cancel('handler disposed');
+    }
   }
 }

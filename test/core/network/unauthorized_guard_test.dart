@@ -3,25 +3,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/core/network/dio_interceptor.dart';
 
 void main() {
-  test('unauthorized guard only handles one unauthorized event at a time', () {
-    var count = 0;
-    final guard = UnauthorizedGuard(onUnauthorized: () => count++);
+  test(
+    'unauthorized guard only handles one unauthorized event at a time',
+    () async {
+      var count = 0;
+      final guard = UnauthorizedGuard(onUnauthorized: () async => count++);
 
-    guard.handle();
-    guard.handle();
-    guard.handle();
+      await Future.wait([guard.handle(), guard.handle(), guard.handle()]);
 
-    expect(count, 1);
-  });
+      expect(count, 1);
+    },
+  );
 
-  test('unauthorized guard can be reset after a new login session starts', () {
-    var count = 0;
-    final guard = UnauthorizedGuard(onUnauthorized: () => count++);
+  test(
+    'unauthorized guard can be reset after a new login session starts',
+    () async {
+      var count = 0;
+      final guard = UnauthorizedGuard(onUnauthorized: () async => count++);
 
-    guard.handle();
-    guard.reset();
-    guard.handle();
+      await guard.handle();
+      guard.reset();
+      await guard.handle();
 
-    expect(count, 2);
-  });
+      expect(count, 2);
+    },
+  );
 }

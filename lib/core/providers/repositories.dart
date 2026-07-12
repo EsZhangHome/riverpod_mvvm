@@ -21,27 +21,38 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/home/repository/home_repository.dart';
+import '../../features/home/model/home_banner.dart';
 import '../../features/login/repository/login_repository.dart';
 import '../../features/profile/repository/profile_repository.dart';
+import '../base/cache_policy.dart';
 import 'services.dart';
+
+final homeBannerCacheProvider = Provider<CachePolicy<List<HomeBanner>>>((ref) {
+  return MemoryCachePolicy<List<HomeBanner>>(
+    duration: const Duration(minutes: 5),
+  );
+});
 
 /// 首页数据仓库。
 ///
 /// 提供 Banner 列表等首页数据，实现缓存优先策略。
 final homeRepositoryProvider = Provider<HomeRepository>((ref) {
-  return HomeRepositoryImpl(apiService: ref.read(apiServiceProvider));
+  return HomeRepositoryImpl(
+    ref.watch(apiServiceProvider),
+    ref.watch(homeBannerCacheProvider),
+  );
 });
 
 /// 登录数据仓库。
 ///
 /// 提供登录/注册等鉴权接口。
 final loginRepositoryProvider = Provider<LoginRepository>((ref) {
-  return LoginRepositoryImpl(apiService: ref.read(apiServiceProvider));
+  return LoginRepositoryImpl(ref.watch(apiServiceProvider));
 });
 
 /// 个人中心数据仓库。
 ///
 /// 提供用户详细资料等接口。
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
-  return ProfileRepositoryImpl(apiService: ref.read(apiServiceProvider));
+  return ProfileRepositoryImpl(ref.watch(apiServiceProvider));
 });

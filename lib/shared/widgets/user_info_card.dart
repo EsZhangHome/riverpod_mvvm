@@ -33,10 +33,7 @@ class UserInfoCard extends StatelessWidget {
           children: [
             const CircleAvatar(radius: 36, child: Icon(Icons.person, size: 40)),
             const SizedBox(height: 16),
-            Text(
-              name ?? '-',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text(name ?? '-', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(email ?? '-'),
           ],

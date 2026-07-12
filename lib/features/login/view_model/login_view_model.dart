@@ -33,19 +33,21 @@ class LoginState {
     String? errorMessage,
     String? token,
     UserModel? user,
+    bool clearToken = false,
+    bool clearUser = false,
   }) {
     return LoginState(
       viewState: viewState ?? this.viewState,
       errorMessage: errorMessage ?? this.errorMessage,
-      token: token ?? this.token,
-      user: user ?? this.user,
+      token: clearToken ? null : token ?? this.token,
+      user: clearUser ? null : user ?? this.user,
     );
   }
 }
 
 // ==================== Notifier ====================
 
-class LoginNotifier extends Notifier<LoginState> {
+class LoginNotifier extends AutoDisposeNotifier<LoginState> {
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -65,16 +67,16 @@ class LoginNotifier extends Notifier<LoginState> {
     }
 
     final response = await _handler.execute(
-      request: () => ref.read(loginRepositoryProvider).login(
+      request: () => ref
+          .read(loginRepositoryProvider)
+          .login(
             LoginRequest(account: account.trim(), password: password.trim()),
             cancelToken: _handler.cancelToken,
           ),
       onLoading: () => state = state.copyWith(viewState: ViewState.loading),
       onSuccess: () => state = state.copyWith(viewState: ViewState.success),
-      onError: (msg) => state = state.copyWith(
-        viewState: ViewState.error,
-        errorMessage: msg,
-      ),
+      onError: (msg) =>
+          state = state.copyWith(viewState: ViewState.error, errorMessage: msg),
     );
 
     if (response == null) return false;
@@ -86,6 +88,6 @@ class LoginNotifier extends Notifier<LoginState> {
 
 // ==================== Provider ====================
 
-final loginProvider = NotifierProvider<LoginNotifier, LoginState>(
+final loginProvider = AutoDisposeNotifierProvider<LoginNotifier, LoginState>(
   LoginNotifier.new,
 );

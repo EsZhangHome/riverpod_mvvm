@@ -28,7 +28,11 @@ import '../permission/permission_service.dart';
 /// 网络服务（全局单例）。
 ///
 /// 所有 Repository 共享同一个 ApiClient.instance，共享拦截器、token 配置。
-final apiServiceProvider = Provider<ApiService>((ref) => ApiClient.instance);
+final apiClientProvider = Provider<ApiClient>((ref) => ApiClient.instance);
+
+final apiServiceProvider = Provider<ApiService>(
+  (ref) => ref.watch(apiClientProvider),
+);
 
 /// 数据库服务（全局单例）。
 ///

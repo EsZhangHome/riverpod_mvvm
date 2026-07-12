@@ -26,18 +26,19 @@ class MineState {
     ViewState? viewState,
     String? errorMessage,
     UserModel? user,
+    bool clearUser = false,
   }) {
     return MineState(
       viewState: viewState ?? this.viewState,
       errorMessage: errorMessage ?? this.errorMessage,
-      user: user ?? this.user,
+      user: clearUser ? null : user ?? this.user,
     );
   }
 }
 
 // ==================== Notifier ====================
 
-class MineNotifier extends Notifier<MineState> {
+class MineNotifier extends AutoDisposeNotifier<MineState> {
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -62,10 +63,8 @@ class MineNotifier extends Notifier<MineState> {
       },
       onLoading: () => state = state.copyWith(viewState: ViewState.loading),
       onSuccess: () => state = state.copyWith(viewState: ViewState.success),
-      onError: (msg) => state = state.copyWith(
-        viewState: ViewState.error,
-        errorMessage: msg,
-      ),
+      onError: (msg) =>
+          state = state.copyWith(viewState: ViewState.error, errorMessage: msg),
     );
 
     if (loadedUser != null) {
@@ -76,6 +75,6 @@ class MineNotifier extends Notifier<MineState> {
 
 // ==================== Provider ====================
 
-final mineProvider = NotifierProvider<MineNotifier, MineState>(
+final mineProvider = AutoDisposeNotifierProvider<MineNotifier, MineState>(
   MineNotifier.new,
 );

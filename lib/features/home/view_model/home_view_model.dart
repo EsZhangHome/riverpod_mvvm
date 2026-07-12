@@ -43,7 +43,7 @@ class HomeState {
 
 // ==================== Notifier ====================
 
-class HomeNotifier extends Notifier<HomeState> {
+class HomeNotifier extends AutoDisposeNotifier<HomeState> {
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -54,16 +54,14 @@ class HomeNotifier extends Notifier<HomeState> {
 
   Future<void> loadHome() async {
     final banners = await _handler.execute<List<HomeBanner>>(
-      request: () => ref.read(homeRepositoryProvider).fetchBanners(
-            cancelToken: _handler.cancelToken,
-          ),
+      request: () => ref
+          .read(homeRepositoryProvider)
+          .fetchBanners(cancelToken: _handler.cancelToken),
       onLoading: () => state = state.copyWith(viewState: ViewState.loading),
       onSuccess: () => state = state.copyWith(viewState: ViewState.success),
       onEmpty: () => state = state.copyWith(viewState: ViewState.empty),
-      onError: (msg) => state = state.copyWith(
-        viewState: ViewState.error,
-        errorMessage: msg,
-      ),
+      onError: (msg) =>
+          state = state.copyWith(viewState: ViewState.error, errorMessage: msg),
       isEmpty: (data) => data.isEmpty,
     );
     if (banners != null) {
@@ -74,6 +72,6 @@ class HomeNotifier extends Notifier<HomeState> {
 
 // ==================== Provider ====================
 
-final homeProvider = NotifierProvider<HomeNotifier, HomeState>(
+final homeProvider = AutoDisposeNotifierProvider<HomeNotifier, HomeState>(
   HomeNotifier.new,
 );

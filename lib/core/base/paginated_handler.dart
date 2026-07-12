@@ -90,6 +90,7 @@ class PaginatedListState<T> {
 /// 每个分页列表 Notifier 在 build() 中创建一个实例。
 class PaginatedListHandler<T> {
   bool _isRequesting = false;
+  bool _isDisposed = false;
   final CancelToken cancelToken = CancelToken();
 
   /// 下拉刷新：重置为第 1 页，清空旧数据，重新加载。
@@ -104,32 +105,41 @@ class PaginatedListHandler<T> {
     required void Function(PaginatedListState<T> state) onStateChanged,
     int pageSize = 20,
   }) async {
-    if (_isRequesting || cancelToken.isCancelled) return;
+    if (_isRequesting || _isDisposed || cancelToken.isCancelled) return;
 
     _isRequesting = true;
-    onStateChanged(currentState.copyWith(
-      viewState: ViewState.loading,
-      isRefreshing: true,
-    ));
+    onStateChanged(
+      currentState.copyWith(viewState: ViewState.loading, isRefreshing: true),
+    );
 
     try {
       final items = await fetchPage(1);
+      if (_isDisposed || cancelToken.isCancelled) return;
       final hasMore = items.length >= pageSize;
-      onStateChanged(currentState.copyWith(
-        viewState: items.isEmpty ? ViewState.empty : ViewState.success,
-        items: items,
-        page: 1,
-        hasMore: hasMore,
-        isRefreshing: false,
-      ));
+      onStateChanged(
+        currentState.copyWith(
+          viewState: items.isEmpty ? ViewState.empty : ViewState.success,
+          items: items,
+          page: 1,
+          hasMore: hasMore,
+          isRefreshing: false,
+        ),
+      );
     } catch (e) {
-      onStateChanged(currentState.copyWith(
-        viewState: currentState.items.isEmpty
-            ? ViewState.error
-            : ViewState.success, // 有旧数据时不覆盖为 error
-        errorMessage: e is BusinessException ? e.userMessage : e.toString(),
-        isRefreshing: false,
-      ));
+      if (_isDisposed ||
+          cancelToken.isCancelled ||
+          (e is ApiException && e.isCancelled)) {
+        return;
+      }
+      onStateChanged(
+        currentState.copyWith(
+          viewState: currentState.items.isEmpty
+              ? ViewState.error
+              : ViewState.success, // 有旧数据时不覆盖为 error
+          errorMessage: e is BusinessException ? e.userMessage : e.toString(),
+          isRefreshing: false,
+        ),
+      );
     } finally {
       _isRequesting = false;
     }
@@ -142,7 +152,7 @@ class PaginatedListHandler<T> {
     required void Function(PaginatedListState<T> state) onStateChanged,
     int pageSize = 20,
   }) async {
-    if (_isRequesting || cancelToken.isCancelled) return;
+    if (_isRequesting || _isDisposed || cancelToken.isCancelled) return;
     if (!currentState.hasMore || currentState.isLoadingMore) return;
 
     _isRequesting = true;
@@ -151,23 +161,37 @@ class PaginatedListHandler<T> {
 
     try {
       final newItems = await fetchPage(nextPage);
+      if (_isDisposed || cancelToken.isCancelled) return;
       final hasMore = newItems.length >= pageSize;
-      onStateChanged(currentState.copyWith(
-        items: [...currentState.items, ...newItems],
-        page: nextPage,
-        hasMore: hasMore,
-        isLoadingMore: false,
-      ));
+      onStateChanged(
+        currentState.copyWith(
+          items: [...currentState.items, ...newItems],
+          page: nextPage,
+          hasMore: hasMore,
+          isLoadingMore: false,
+        ),
+      );
     } catch (e) {
-      onStateChanged(currentState.copyWith(
-        errorMessage: e is BusinessException ? e.userMessage : e.toString(),
-        isLoadingMore: false,
-      ));
+      if (_isDisposed ||
+          cancelToken.isCancelled ||
+          (e is ApiException && e.isCancelled)) {
+        return;
+      }
+      onStateChanged(
+        currentState.copyWith(
+          errorMessage: e is BusinessException ? e.userMessage : e.toString(),
+          isLoadingMore: false,
+        ),
+      );
     } finally {
       _isRequesting = false;
     }
   }
 
   /// 释放资源。
-  void dispose() => cancelToken.cancel();
+  void dispose() {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    if (!cancelToken.isCancelled) cancelToken.cancel('paginator disposed');
+  }
 }

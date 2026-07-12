@@ -106,7 +106,7 @@ class UnauthorizedGuard {
   UnauthorizedGuard({required this.onUnauthorized});
 
   /// 401 时的回调，通常由 AuthProvider 注入，执行 logout 逻辑。
-  final void Function() onUnauthorized;
+  final Future<void> Function() onUnauthorized;
 
   /// 是否正在处理 401，防止并发重复触发。
   bool _isHandling = false;
@@ -115,13 +115,17 @@ class UnauthorizedGuard {
   ///
   /// 如果 _isHandling 为 true，直接返回不做任何操作。
   /// 如果 _isHandling 为 false，设置为 true 并调用 onUnauthorized。
-  void handle() {
+  Future<void> handle() async {
     if (_isHandling) {
       // 已经处理过 401，跳过，避免重复 logout
       return;
     }
     _isHandling = true;
-    onUnauthorized();
+    try {
+      await onUnauthorized();
+    } catch (error) {
+      AppLogger.log('Unauthorized handling failed: $error');
+    }
   }
 
   /// 重置 401 处理状态。
@@ -152,11 +156,14 @@ class UnauthorizedInterceptor extends Interceptor {
   final UnauthorizedGuard guard;
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) {
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
     // 检查 HTTP 状态码是否为 401
     if (err.response?.statusCode == 401) {
       // 通过 guard 通知 AuthProvider，内部有防抖保护
-      guard.handle();
+      await guard.handle();
     }
     // 无论是否处理 401，都继续传递错误
     handler.next(err);
@@ -222,6 +229,12 @@ class RetryInterceptor extends Interceptor {
             : retryDelays.length - 1];
     await Future<void>.delayed(Duration(seconds: delaySeconds));
 
+    // 页面可能在退避等待期间销毁，取消后不再发起重试。
+    if (err.requestOptions.cancelToken?.isCancelled ?? false) {
+      handler.next(err);
+      return;
+    }
+
     // ---- 步骤 4：更新重试计数并重新发起请求 ----
     err.requestOptions.extra['retryIndex'] = retryIndex + 1;
     try {
@@ -249,6 +262,13 @@ class RetryInterceptor extends Interceptor {
   /// - cancel：用户主动取消
   /// - unknown：无法确定原因，不冒险重试
   bool _shouldRetry(DioException err) {
+    const retryableMethods = {'GET', 'HEAD'};
+    final explicitlyRetryable = err.requestOptions.extra['allowRetry'] == true;
+    if (!retryableMethods.contains(err.requestOptions.method.toUpperCase()) &&
+        !explicitlyRetryable) {
+      return false;
+    }
+
     switch (err.type) {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:

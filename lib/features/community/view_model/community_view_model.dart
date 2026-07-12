@@ -35,7 +35,7 @@ class CommunityState {
 
 // ==================== Notifier ====================
 
-class CommunityNotifier extends Notifier<CommunityState> {
+class CommunityNotifier extends AutoDisposeNotifier<CommunityState> {
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -57,10 +57,8 @@ class CommunityNotifier extends Notifier<CommunityState> {
       onLoading: () => state = state.copyWith(viewState: ViewState.loading),
       onSuccess: () => state = state.copyWith(viewState: ViewState.success),
       onEmpty: () => state = state.copyWith(viewState: ViewState.empty),
-      onError: (msg) => state = state.copyWith(
-        viewState: ViewState.error,
-        errorMessage: msg,
-      ),
+      onError: (msg) =>
+          state = state.copyWith(viewState: ViewState.error, errorMessage: msg),
       isEmpty: (data) => data.isEmpty,
     );
 
@@ -72,6 +70,7 @@ class CommunityNotifier extends Notifier<CommunityState> {
 
 // ==================== Provider ====================
 
-final communityProvider = NotifierProvider<CommunityNotifier, CommunityState>(
-  CommunityNotifier.new,
-);
+final communityProvider =
+    AutoDisposeNotifierProvider<CommunityNotifier, CommunityState>(
+      CommunityNotifier.new,
+    );

@@ -46,6 +46,11 @@ class ApiException implements Exception {
   /// 未知错误：无法归类的异常。
   static const int unknownError = -4;
 
+  /// 请求被调用方主动取消，不属于用户可见的请求失败。
+  static const int cancelledError = -5;
+
+  bool get isCancelled => code == cancelledError;
+
   /// 工厂方法：从 DioException 创建 ApiException。
   ///
   /// 把 Dio 的 DioExceptionType 枚举逐一映射为用户可读的文案：
@@ -80,7 +85,7 @@ class ApiException implements Exception {
       // 通常是页面销毁时 cancelToken.cancel() 导致
       case DioExceptionType.cancel:
         return const ApiException(
-          code: networkError,
+          code: cancelledError,
           message: AppStrings.requestCanceled,
         );
 

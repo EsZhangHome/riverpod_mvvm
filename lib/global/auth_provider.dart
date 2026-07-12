@@ -18,7 +18,7 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/network/api_client.dart';
+import '../core/providers/services.dart';
 import '../core/storage/local_storage.dart';
 import '../core/storage/token_storage.dart';
 import '../shared/models/user_model.dart';
@@ -75,10 +75,11 @@ class AuthNotifier extends Notifier<AuthState> {
 
   @override
   AuthState build() {
+    final apiClient = ref.read(apiClientProvider);
     // 注入网络层回调：tokenProvider 和 unauthorisedCallback
     // 闭包捕获 this，每次调用时返回最新的 state.token
-    ApiClient.instance.setTokenProvider(() => state.token);
-    ApiClient.instance.setUnauthorizedCallback(logout);
+    apiClient.setTokenProvider(() => state.token);
+    apiClient.setUnauthorizedCallback(logout);
 
     // 启动时从本地恢复登录态
     // 使用 Future.microtask 延迟执行：build() 期间 state 尚未完全初始化
@@ -99,9 +100,7 @@ class AuthNotifier extends Notifier<AuthState> {
       final userJson = LocalStorage.getString(_userKey);
       UserModel? user;
       if (userJson != null && userJson.isNotEmpty) {
-        user = UserModel.fromJson(
-          jsonDecode(userJson) as Map<String, dynamic>,
-        );
+        user = UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
       }
       state = state.copyWith(
         token: token,
@@ -123,7 +122,7 @@ class AuthNotifier extends Notifier<AuthState> {
     state = state.copyWith(token: token, currentUser: user);
 
     // 重置 401 守卫，允许新会话的下一次 401 触发退出
-    ApiClient.instance.resetUnauthorizedGuard();
+    ref.read(apiClientProvider).resetUnauthorizedGuard();
 
     // 写入本地存储
     await TokenStorage.saveToken(token);

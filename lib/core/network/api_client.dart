@@ -96,7 +96,7 @@ class ApiClient implements ApiService {
   /// 401 未授权回调，由 AuthProvider 注入。
   ///
   /// 当拦截器捕获到 401 错误时，调用这个回调执行退出登录。
-  void Function()? _onUnauthorized;
+  Future<void> Function()? _onUnauthorized;
 
   /// 401 防抖守卫，防止多个并发 401 重复触发退出登录。
   UnauthorizedGuard? _unauthorizedGuard;
@@ -160,7 +160,7 @@ class ApiClient implements ApiService {
   /// 由 AuthProvider 在构造时调用。
   /// 设置后会创建 UnauthorizedGuard 和 UnauthorizedInterceptor，
   /// 并重新组装拦截器链。
-  void setUnauthorizedCallback(void Function() callback) {
+  void setUnauthorizedCallback(Future<void> Function() callback) {
     _onUnauthorized = callback;
     _unauthorizedGuard = UnauthorizedGuard(onUnauthorized: callback);
     _resetInterceptors();

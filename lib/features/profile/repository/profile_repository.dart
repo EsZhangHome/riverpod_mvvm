@@ -7,8 +7,8 @@
 import 'package:dio/dio.dart';
 
 import '../../../core/config/env_config.dart';
-import '../../../core/network/api_client.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/network/endpoints.dart';
 import '../../../shared/models/user_model.dart';
 
@@ -20,8 +20,7 @@ abstract class ProfileRepository {
 }
 
 class ProfileRepositoryImpl implements ProfileRepository {
-  ProfileRepositoryImpl({ApiService? apiService})
-    : _apiService = apiService ?? ApiClient.instance;
+  ProfileRepositoryImpl(this._apiService);
 
   final ApiService _apiService;
 
@@ -47,6 +46,13 @@ class ProfileRepositoryImpl implements ProfileRepository {
       cancelToken: cancelToken,
       fromJson: (json) => UserModel.fromJson(json as Map<String, dynamic>),
     );
-    return response.data!;
+    final data = response.data;
+    if (data == null) {
+      throw const ApiException(
+        code: ApiException.unknownError,
+        message: '响应数据为空',
+      );
+    }
+    return data;
   }
 }

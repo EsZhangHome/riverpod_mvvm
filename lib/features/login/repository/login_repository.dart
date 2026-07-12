@@ -7,8 +7,8 @@
 import 'package:dio/dio.dart';
 
 import '../../../core/config/env_config.dart';
-import '../../../core/network/api_client.dart';
 import '../../../core/network/api_service.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/network/endpoints.dart';
 import '../model/login_request.dart';
 import '../model/login_response.dart';
@@ -18,8 +18,7 @@ abstract class LoginRepository {
 }
 
 class LoginRepositoryImpl implements LoginRepository {
-  LoginRepositoryImpl({ApiService? apiService})
-    : _apiService = apiService ?? ApiClient.instance;
+  LoginRepositoryImpl(this._apiService);
 
   final ApiService _apiService;
 
@@ -59,6 +58,13 @@ class LoginRepositoryImpl implements LoginRepository {
       cancelToken: cancelToken,
       fromJson: (json) => LoginResponse.fromJson(json as Map<String, dynamic>),
     );
-    return response.data!;
+    final data = response.data;
+    if (data == null) {
+      throw const ApiException(
+        code: ApiException.unknownError,
+        message: '响应数据为空',
+      );
+    }
+    return data;
   }
 }

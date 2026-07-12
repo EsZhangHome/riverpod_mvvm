@@ -26,19 +26,21 @@ class FakeLoginRepository implements LoginRepository {
 }
 
 void main() {
-  test('login notifier uses fake repository via ProviderContainer override',
-      () async {
-    final container = ProviderContainer(
-      overrides: [
-        loginRepositoryProvider.overrideWith((ref) => FakeLoginRepository()),
-      ],
-    );
+  test(
+    'login notifier uses fake repository via ProviderContainer override',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          loginRepositoryProvider.overrideWith((ref) => FakeLoginRepository()),
+        ],
+      );
 
-    final notifier = container.read(loginProvider.notifier);
-    final success = await notifier.login('test@example.com', '123456');
+      final notifier = container.read(loginProvider.notifier);
+      final success = await notifier.login('test@example.com', '123456');
 
-    expect(success, isTrue);
-    expect(notifier.state.token, 'fake_token');
-    expect(notifier.state.user?.name, 'Test User');
-  });
+      expect(success, isTrue);
+      expect(notifier.state.token, 'fake_token');
+      expect(notifier.state.user?.name, 'Test User');
+    },
+  );
 }

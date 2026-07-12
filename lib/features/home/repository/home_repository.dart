@@ -22,7 +22,6 @@ import 'package:dio/dio.dart';
 
 import '../../../core/base/cache_policy.dart';
 import '../../../core/config/env_config.dart';
-import '../../../core/network/api_client.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/endpoints.dart';
 import '../model/home_banner.dart';
@@ -44,16 +43,7 @@ abstract class HomeRepository {
 /// 实现缓存优先策略，让用户打开首页时能立即看到内容（即使网络较慢）。
 /// 以后首页接口变复杂（如多个接口、分页等），也只在这里处理数据来源。
 class HomeRepositoryImpl implements HomeRepository {
-  HomeRepositoryImpl({
-    ApiService? apiService,
-    CachePolicy<List<HomeBanner>>? cachePolicy,
-  }) : _apiService = apiService ?? ApiClient.instance,
-       _cachePolicy =
-           cachePolicy ??
-           MemoryCachePolicy<List<HomeBanner>>(
-             // 默认缓存有效期 5 分钟，超过后重新拉取
-             duration: const Duration(minutes: 5),
-           );
+  HomeRepositoryImpl(this._apiService, this._cachePolicy);
 
   /// 网络服务，通过 DI 注入。Mock 模式下不会被调用。
   final ApiService _apiService;

@@ -18,18 +18,20 @@ class FakeHomeRepository implements HomeRepository {
 }
 
 void main() {
-  test('home notifier uses fake repository via ProviderContainer override',
-      () async {
-    final container = ProviderContainer(
-      overrides: [
-        homeRepositoryProvider.overrideWith((ref) => FakeHomeRepository()),
-      ],
-    );
+  test(
+    'home notifier uses fake repository via ProviderContainer override',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          homeRepositoryProvider.overrideWith((ref) => FakeHomeRepository()),
+        ],
+      );
 
-    final notifier = container.read(homeProvider.notifier);
-    await notifier.loadHome();
+      final notifier = container.read(homeProvider.notifier);
+      await notifier.loadHome();
 
-    expect(notifier.state.banners, hasLength(1));
-    expect(notifier.state.banners.first.title, 'Fake Banner');
-  });
+      expect(notifier.state.banners, hasLength(1));
+      expect(notifier.state.banners.first.title, 'Fake Banner');
+    },
+  );
 }
