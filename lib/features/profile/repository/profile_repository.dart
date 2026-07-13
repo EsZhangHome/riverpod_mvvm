@@ -3,6 +3,7 @@
 // 作用：个人中心数据仓库，负责获取用户详细资料。
 //
 // Mock 开关：通过 EnvConfig.enableMock 控制。
+// Profile 是保留的未来功能示例，依然遵循 ViewModel -> Repository -> ApiService。
 
 import 'package:dio/dio.dart';
 
@@ -13,6 +14,7 @@ import '../../../core/network/endpoints.dart';
 import '../../../shared/models/user_model.dart';
 
 abstract class ProfileRepository {
+  /// fallbackUser 让 Mock/弱网场景可以复用当前会话中的基础资料。
   Future<UserModel> fetchProfile(
     UserModel fallbackUser, {
     CancelToken? cancelToken,
@@ -29,6 +31,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
     UserModel fallbackUser, {
     CancelToken? cancelToken,
   }) async {
+    // 编译期开关决定数据源，页面不写 if/else。
     if (EnvConfig.enableMock) {
       return _mockProfile(fallbackUser);
     }
@@ -36,11 +39,13 @@ class ProfileRepositoryImpl implements ProfileRepository {
   }
 
   Future<UserModel> _mockProfile(UserModel fallbackUser) async {
+    // 模拟请求耗时后返回不可变会话用户。
     await Future<void>.delayed(const Duration(milliseconds: 500));
     return fallbackUser;
   }
 
   Future<UserModel> _apiProfile({CancelToken? cancelToken}) async {
+    // ApiService 负责解析，Repository 负责拒绝成功响应中的空业务数据。
     final response = await _apiService.get<UserModel>(
       Endpoints.profile,
       cancelToken: cancelToken,

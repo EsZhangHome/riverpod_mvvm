@@ -2,18 +2,15 @@
 //
 // 作用：定义路由守卫机制，控制用户在不同登录状态下能访问哪些页面。
 //
-// 迁移说明（Provider → Riverpod）：
-// - AuthRouteGuard 不再持有 AuthProvider 引用
-// - 改为通过 ProviderScope.containerOf(context).read(authProvider) 获取登录状态
-// - RouteGuard 接口不变
-//
 // 扩展方式：
 // ```dart
 // class VipRouteGuard implements RouteGuard {
+//   VipRouteGuard(this.readUser);
+//   final User Function() readUser;
+//
 //   @override
-//   String? redirect(GoRouterState state, BuildContext context) {
-//     final authState = ProviderScope.containerOf(context).read(authProvider);
-//     if (state.matchedLocation == '/vip' && !user.isVip) {
+//   String? redirect(GoRouterState state) {
+//     if (state.matchedLocation == '/vip' && !readUser().isVip) {
 //       return '/upgrade';
 //     }
 //     return null;
@@ -21,8 +18,6 @@
 // }
 // ```
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../global/auth_provider.dart';
@@ -37,13 +32,12 @@ abstract class RouteGuard {
   /// 检查当前路由是否需要重定向。
   ///
   /// [state]：GoRouter 当前状态，包含 matchedLocation
-  /// [context]：当前 BuildContext，可通过 ProviderScope.containerOf 获取 Riverpod 状态
-  String? redirect(GoRouterState state, BuildContext context);
+  String? redirect(GoRouterState state);
 }
 
 /// 登录状态路由守卫。
 ///
-/// 通过 Riverpod 的 ProviderScope.containerOf 获取登录状态，不持有引用。
+/// 通过构造参数读取最新登录状态，不依赖 ProviderScope 或具体状态管理框架。
 ///
 /// 拦截规则：
 /// 1. 恢复登录态期间 → 停留在启动页
@@ -51,21 +45,28 @@ abstract class RouteGuard {
 /// 3. 未登录 + 受保护页面 → 重定向到登录页
 /// 4. 已登录 + 登录页 → 重定向到主页面
 class AuthRouteGuard implements RouteGuard {
-  const AuthRouteGuard();
+  const AuthRouteGuard(this._readAuthState);
+
+  /// App 层通常传入 `() => ref.read(authProvider)`。
+  /// 测试则传入普通闭包，因此不需要挂载 ProviderScope。
+  final AuthState Function() _readAuthState;
 
   @override
-  String? redirect(GoRouterState state, BuildContext context) {
-    // 通过 ProviderScope 获取当前登录状态
-    final container = ProviderScope.containerOf(context);
-    final authState = container.read(authProvider);
+  String? redirect(GoRouterState state) {
+    // 每次 GoRouter 执行 redirect 时读取最新快照，不缓存过期登录状态。
+    final authState = _readAuthState();
+    return redirectLocation(state.matchedLocation, authState);
+  }
 
-    final isLoginRoute = state.matchedLocation == RoutePaths.login;
-    final isSplashRoute = state.matchedLocation == RoutePaths.splash;
+  /// 纯函数形式的守卫规则，方便覆盖完整重定向矩阵而无需构造 GoRouterState。
+  String? redirectLocation(String location, AuthState authState) {
+    final isLoginRoute = location == RoutePaths.login;
+    final isSplashRoute = location == RoutePaths.splash;
     // 统一保护 /main 后代路由以及从“我的”进入的学习中心。
     final isProtectedRoute =
-        state.matchedLocation == RoutePaths.main ||
-        state.matchedLocation.startsWith('${RoutePaths.main}/') ||
-        state.matchedLocation == RoutePaths.riverpodLearning;
+        location == RoutePaths.main ||
+        location.startsWith('${RoutePaths.main}/') ||
+        location == RoutePaths.riverpodLearning;
 
     // 规则 0：恢复登录态期间停留在启动页
     if (authState.isRestoringSession) {

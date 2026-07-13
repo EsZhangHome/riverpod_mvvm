@@ -2,20 +2,27 @@
 //
 // 教学内容也通过 Repository 提供。未来可以改成本地 JSON、Markdown 或远端配置，
 // View 和 ViewModel 都不需要知道内容来源。
+//
+// 本文件中的长字符串是“展示给学习者的示例源码”，不会被 Dart 执行；
+// 真正可运行的完整实现应继续对照对应 feature 源文件阅读。
 
 import '../../../core/l10n/app_strings.dart';
 import '../model/riverpod_lesson.dart';
 
 abstract interface class RiverpodLearningRepository {
+  /// 返回按基础、异步、全局排列的完整课程集合。
   List<RiverpodLesson> getLessons();
 }
 
+/// 使用编译期常量保存课程的本地实现，不产生 IO 或网络请求。
 class LocalRiverpodLearningRepository implements RiverpodLearningRepository {
   const LocalRiverpodLearningRepository();
 
   @override
+  // 返回不可变 const 列表；ViewModel 只能选择课程，不能修改课程内容。
   List<RiverpodLesson> getLessons() => _lessons;
 
+  // 枚举顺序和列表顺序保持一致，上一站/下一站才能按预期导航。
   static const List<RiverpodLesson> _lessons = [
     RiverpodLesson(
       stage: RiverpodLessonStage.basic,

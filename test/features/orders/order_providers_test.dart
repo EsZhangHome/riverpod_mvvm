@@ -16,6 +16,7 @@ class _FakeOrderRepository implements OrderRepository {
     this.statusController,
   });
 
+  /// 非 null Completer 让测试决定请求何时成功或失败。
   final Completer<Order>? cancelCompleter;
   final Completer<OrderPageResult>? pageTwoCompleter;
   final Completer<Order>? detailCompleter;
@@ -112,6 +113,7 @@ ProviderContainer _createContainer(
   _FakeOrderRepository repository, {
   Duration? detailCacheDuration,
 }) {
+  // 所有测试复用同一 override 入口；TTL 可缩短到毫秒，避免真实等待 30 秒。
   return ProviderContainer(
     overrides: [
       orderRepositoryProvider.overrideWith((ref) => repository),
@@ -348,3 +350,6 @@ void main() {
     await streamCancelled.future.timeout(const Duration(seconds: 1));
   });
 }
+
+// 订单 Provider 综合测试：Fake Repository 可精确控制 Future/Stream 完成时机，
+// 用于复现分页与创建并发、乐观取消与远端事件竞态、TTL 和 CancelToken 生命周期。

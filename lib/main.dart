@@ -2,10 +2,6 @@
 //
 // 作用：App 的入口文件，负责初始化顺序和全局异常捕获。
 //
-// 迁移说明（Provider → Riverpod）：
-// - 移除 setupServiceLocator() 调用（get_it 不再使用）
-// - runApp 外包裹 ProviderScope（Riverpod 的根节点）
-//
 // 启动流程：
 // 1. 注册全局异常捕获
 // 2. 绑定 Flutter 引擎
@@ -52,8 +48,8 @@ Future<void> main() async {
 
   // ==================== 步骤 5：启动 App ====================
 
-  // ProviderScope 是 Riverpod 的根节点，替代了 Provider 的 MultiProvider
-  // 和 get_it 的 service_locator。所有 Provider 在此之下可用。
+  // ProviderScope 是 Riverpod 的根节点，子树中的 Widget 和 Notifier
+  // 都从同一个容器读取依赖与状态。
   runApp(const ProviderScope(child: MyApp()));
 }
 

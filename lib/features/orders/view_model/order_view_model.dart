@@ -7,6 +7,9 @@
 // - 派生 Provider 组合列表与筛选，不保存重复状态；
 // - FutureProvider.family 管参数化详情和离开页面后的 TTL 缓存；
 // - StreamProvider.family 管某一订单的实时状态并自动取消订阅。
+//
+// 建议阅读顺序：Repository Provider -> Filter Notifier -> OrderFeedState
+// -> OrderFeedNotifier.build/loadMore/create/cancel -> 派生列表 -> 详情/实时 Provider。
 
 import 'dart:async';
 
@@ -58,6 +61,7 @@ class OrderOperationResult {
   const OrderOperationResult.success(this.message) : isError = false;
   const OrderOperationResult.failure(this.message) : isError = true;
 
+  /// View 可直接展示的消息，不携带 BuildContext 或 SnackBar 类型。
   final String message;
   final bool isError;
 }
@@ -90,13 +94,24 @@ class OrderFeedState {
     required this.operationResult,
   });
 
+  /// 当前已合并、按 id 去重的订单集合。
   final List<Order> orders;
+
+  /// 已成功加载的最后页码及服务端是否还有下一页。
   final int page;
   final bool hasMore;
+
+  /// 局部命令状态。它们不应把整个 AsyncValue 改成 AsyncLoading。
   final bool isLoadingMore;
   final bool isCreating;
+
+  /// 正在乐观更新的订单 id；View 只给对应卡片显示 loading。
   final Set<String> updatingIds;
+
+  /// 乐观命令期间到达的实时状态，失败回滚时合并而不是丢弃。
   final Map<String, OrderStatus> pendingRemoteStatuses;
+
+  /// 供 ref.listen 消费的一次性操作结果。
   final OrderOperationResult? operationResult;
 
   OrderFeedState copyWith({
@@ -131,8 +146,10 @@ class OrderFeedState {
 }
 
 class OrderFeedNotifier extends AsyncNotifier<OrderFeedState> {
+  // 同一个列表 Provider 可能同时执行分页、创建和取消，因此跟踪全部请求令牌。
   final Set<CancelToken> _activeRequestTokens = {};
 
+  // 命令方法用 read 获取当前 Repository，不额外建立重复依赖。
   OrderRepository get _repository => ref.read(orderRepositoryProvider);
 
   @override
@@ -140,6 +157,7 @@ class OrderFeedNotifier extends AsyncNotifier<OrderFeedState> {
     // watch 建立依赖关系：Repository Provider 被 invalidate/override 时，
     // Riverpod 会自动重建订单列表，不会出现“列表来自旧仓库、命令发给新仓库”。
     final repository = ref.watch(orderRepositoryProvider);
+    // Provider 因路由、容器或登录用户变化销毁时，统一取消全部未完成请求。
     ref.onDispose(_cancelActiveRequests);
     final cancelToken = _startRequest();
     try {
@@ -386,16 +404,19 @@ class OrderFeedNotifier extends AsyncNotifier<OrderFeedState> {
   }
 
   CancelToken _startRequest() {
+    // 每个并发命令有独立令牌，完成后只移除自己的令牌。
     final cancelToken = CancelToken();
     _activeRequestTokens.add(cancelToken);
     return cancelToken;
   }
 
   void _finishRequest(CancelToken cancelToken) {
+    // 已完成请求不再需要 dispose 阶段重复取消。
     _activeRequestTokens.remove(cancelToken);
   }
 
   void _cancelActiveRequests() {
+    // toList 创建快照，避免遍历时集合被异步 finally 修改。
     for (final cancelToken in _activeRequestTokens.toList()) {
       if (!cancelToken.isCancelled) {
         cancelToken.cancel('order provider disposed or session changed');
@@ -405,6 +426,7 @@ class OrderFeedNotifier extends AsyncNotifier<OrderFeedState> {
   }
 
   List<Order> _mergeUnique(List<Order> current, List<Order> incoming) {
+    // 创建订单会移动 offset；以 id 去重可防止后续页重复追加已有订单。
     final knownIds = current.map((order) => order.id).toSet();
     return [...current, ...incoming.where((order) => knownIds.add(order.id))];
   }

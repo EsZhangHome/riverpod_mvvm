@@ -17,13 +17,14 @@ class LoginResponse {
   /// 鉴权令牌
   final String token;
 
-  /// 登录用户信息
-  @JsonKey(defaultValue: null)
+  /// 登录用户信息。协议约定登录成功时必须返回，因此保持非空类型。
   final UserModel user;
 
+  /// 反序列化委托给生成代码，Model 本身只声明协议字段。
   factory LoginResponse.fromJson(Map<String, dynamic> json) =>
       _$LoginResponseFromJson(json);
 
+  /// Repository 或缓存需要 Map 时使用生成代码，避免手写 key 出错。
   Map<String, dynamic> toJson() => _$LoginResponseToJson(this);
 
   @override

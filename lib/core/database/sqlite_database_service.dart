@@ -16,6 +16,8 @@ import 'database_service.dart';
 /// 默认从 AppDatabase 获取数据库实例。
 /// 测试时也可以传入自定义 databaseProvider。
 class SqliteDatabaseService extends _SqliteExecutorService {
+  /// 不直接保存 Database，而是注入异步获取函数：生产环境复用 AppDatabase，
+  /// 测试可以传入内存数据库，也不会把 sqflite 初始化传播到 Repository。
   SqliteDatabaseService({Future<Database> Function()? databaseProvider})
     : _databaseProvider = databaseProvider ?? (() => AppDatabase.database);
 
@@ -30,6 +32,8 @@ class SqliteDatabaseService extends _SqliteExecutorService {
 /// sqflite 的 Database 和 Transaction 都实现了 DatabaseExecutor，
 /// 所以普通操作和事务操作可以复用同一套 CRUD 代码。
 abstract class _SqliteExecutorService implements DatabaseService {
+  /// 普通服务返回 Database，事务服务返回 Transaction。
+  /// CRUD 只依赖二者共同实现的 DatabaseExecutor。
   Future<DatabaseExecutor> get executor;
 
   @override
@@ -38,6 +42,7 @@ abstract class _SqliteExecutorService implements DatabaseService {
     Map<String, Object?> values, {
     bool replaceOnConflict = false,
   }) {
+    // 所有公开操作统一进入 _guard，保证三方异常不会越过数据层边界。
     return _guard('插入数据失败', () async {
       final databaseExecutor = await executor;
       return databaseExecutor.insert(
@@ -116,6 +121,8 @@ abstract class _SqliteExecutorService implements DatabaseService {
     return _guard('执行数据库事务失败', () async {
       final databaseExecutor = await executor;
       if (databaseExecutor is Database) {
+        // 从普通 Database 开启事务，并把 Transaction 包装回同一抽象接口。
+        // 回调内必须使用传入的 service，所有操作才会处于同一事务。
         return databaseExecutor.transaction<T>((transaction) {
           return action(_SqliteTransactionDatabaseService(transaction));
         });
@@ -128,6 +135,7 @@ abstract class _SqliteExecutorService implements DatabaseService {
 
   @override
   Future<void> clearTable(String table) async {
+    // 复用 delete，让清表也获得统一异常转换。
     await delete(table);
   }
 
@@ -136,8 +144,10 @@ abstract class _SqliteExecutorService implements DatabaseService {
     try {
       return await action();
     } on DatabaseException {
+      // 内层事务已经转换过的项目异常直接上抛，避免重复包裹丢失语义。
       rethrow;
     } catch (error, stack) {
+      // 保存原始 cause 和 stack，页面得到稳定异常类型，日志仍可定位根因。
       throw DatabaseException(message, cause: error, stackTrace: stack);
     }
   }

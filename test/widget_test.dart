@@ -13,10 +13,12 @@ void main() {
   testWidgets('app starts at login page when there is no token', (
     tester,
   ) async {
+    // Arrange：明确设置空存储，避免测试受本机历史数据影响。
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     await LocalStorage.init();
 
+    // Act：挂载完整 App，ProviderScope、AuthNotifier、GoRouter 都走生产组装路径。
     await tester.pumpWidget(const ProviderScope(child: MyApp()));
     await tester.pumpAndSettle();
 
@@ -43,6 +45,7 @@ void main() {
   testWidgets('app does not paint login page while restoring saved session', (
     tester,
   ) async {
+    // Arrange：同时准备 token 和用户 JSON，模拟上一次已登录。
     SharedPreferences.setMockInitialValues({
       'current_user':
           '{"id":"1","name":"Test User","email":"test@example.com"}',
@@ -58,3 +61,5 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 }
+
+// App 根级 Widget 测试：关注启动期会话恢复和路由守卫，不测试具体业务列表。

@@ -1,6 +1,6 @@
 // lib/core/providers/repositories.dart
 //
-// 作用：所有 Repository 的 Riverpod Provider 声明，替代 get_it 的 registerLazySingleton。
+// 作用：集中声明 Repository Provider，明确 Repository 与底层服务的依赖图。
 //
 // 注册的仓库：
 // - HomeRepository：首页数据
@@ -17,6 +17,10 @@
 // // 在 Notifier 的方法中通过 ref 获取
 // final banners = await ref.read(homeRepositoryProvider).fetchBanners();
 // ```
+//
+// 依赖组装顺序：
+// Service Provider -> Repository Provider -> Feature ViewModel Provider -> View。
+// 本文件只负责“怎么创建 Repository”，不执行任何业务请求。
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -28,6 +32,7 @@ import '../base/cache_policy.dart';
 import 'services.dart';
 
 final homeBannerCacheProvider = Provider<CachePolicy<List<HomeBanner>>>((ref) {
+  // 缓存策略本身也可 override，测试可以缩短有效期或替换为无缓存实现。
   return MemoryCachePolicy<List<HomeBanner>>(
     duration: const Duration(minutes: 5),
   );
@@ -37,6 +42,7 @@ final homeBannerCacheProvider = Provider<CachePolicy<List<HomeBanner>>>((ref) {
 ///
 /// 提供 Banner 列表等首页数据，实现缓存优先策略。
 final homeRepositoryProvider = Provider<HomeRepository>((ref) {
+  // watch 两个依赖：任意依赖替换后，Repository 会按新依赖重新组装。
   return HomeRepositoryImpl(
     ref.watch(apiServiceProvider),
     ref.watch(homeBannerCacheProvider),
@@ -47,6 +53,7 @@ final homeRepositoryProvider = Provider<HomeRepository>((ref) {
 ///
 /// 提供登录/注册等鉴权接口。
 final loginRepositoryProvider = Provider<LoginRepository>((ref) {
+  // ViewModel 只认识 LoginRepository 接口，不直接接触 ApiService。
   return LoginRepositoryImpl(ref.watch(apiServiceProvider));
 });
 

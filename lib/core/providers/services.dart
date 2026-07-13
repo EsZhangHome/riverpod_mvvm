@@ -1,6 +1,6 @@
 // lib/core/providers/services.dart
 //
-// 作用：所有底层服务的 Riverpod Provider 声明，替代 get_it 的 registerLazySingleton。
+// 作用：集中声明底层服务的 Riverpod Provider，作为基础设施依赖注入入口。
 //
 // 注册的服务：
 // - ApiService：网络请求统一入口
@@ -14,6 +14,12 @@
 // // 在 Notifier 的 build() 或方法中通过 ref 获取
 // final apiService = ref.read(apiServiceProvider);
 // ```
+//
+// 阅读顺序：
+// 1. ApiClient 是真正持有 Dio、拦截器和 token 回调的底层对象；
+// 2. ApiService 是 Repository 面向的抽象请求入口；
+// 3. 其他平台插件先封装成 Service 接口，再通过 Provider 注入；
+// 4. 测试通过 override 替换某个 Service，业务层不需要启动真实插件。
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -31,6 +37,7 @@ import '../permission/permission_service.dart';
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient.instance);
 
 final apiServiceProvider = Provider<ApiService>(
+  // watch 表示 ApiClient Provider 如果被测试 override，ApiService 也同步重建。
   (ref) => ref.watch(apiClientProvider),
 );
 
@@ -38,6 +45,7 @@ final apiServiceProvider = Provider<ApiService>(
 ///
 /// Repository 依赖抽象接口 DatabaseService，而不是直接依赖 sqflite。
 final databaseServiceProvider = Provider<DatabaseService>(
+  // 对外暴露接口类型，隐藏 sqflite 的具体实现。
   (ref) => SqliteDatabaseService(),
 );
 

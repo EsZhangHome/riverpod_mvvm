@@ -161,7 +161,7 @@ flutter build ios --simulator --no-codesign
 | 1. 商品 | 搜索、分类、收藏、购物车明细、汇总 | `Provider`、`NotifierProvider`、派生 Provider、`family`、`select`、`watch/read/listen` | `features/home` |
 | 2. 订单 | 初载、刷新、分页、创建、乐观取消、详情缓存、实时物流 | `AsyncNotifierProvider`、`FutureProvider.family`、`StreamProvider.family`、`AsyncValue`、`retry`、`refresh/invalidate`、`keepAlive` | `features/orders` |
 | 3. 我的 | 登录态驱动路由、主题持久化、App 信息、网络状态 | App 级 Provider、Service Provider、`FutureProvider`、`StreamProvider`、依赖 override | `features/mine`、`global`、`core/providers` |
-| 4. 网络生命周期 | 页面销毁时取消 Dio 请求、丢弃过期结果 | `autoDispose`、`ref.onDispose`、`ref.mounted`、`CancelToken` | `features/home/view_model/home_view_model.dart`、`features/orders`、`core/base/base_view_model.dart` |
+| 4. 网络生命周期 | 页面销毁时取消 Dio 请求、丢弃过期结果 | `autoDispose`、`ref.onDispose`、`ref.mounted`、`CancelToken` | `features/home/view_model/home_view_model.dart`、`features/orders`、`core/base/async_request_handler.dart` |
 
 Provider 的生命周期按业务选择，而不是全部加 `autoDispose`：
 
@@ -271,7 +271,7 @@ main()
 
 #### AsyncRequestHandler
 
-文件：[lib/core/base/base_view_model.dart](lib/core/base/base_view_model.dart)
+文件：[lib/core/base/async_request_handler.dart](lib/core/base/async_request_handler.dart)
 
 `AsyncRequestHandler` 是 Notifier 中使用的异步请求工具类（替代旧的 `BaseViewModel extends ChangeNotifier`）。
 
@@ -325,9 +325,9 @@ enum ViewState {
 
 #### PageShell
 
-文件：[lib/core/base/base_page.dart](lib/core/base/base_page.dart)
+文件：[lib/core/base/page_shell.dart](lib/core/base/page_shell.dart)
 
-`PageShell` 是精简的页面外壳（替代旧的 `BasePage + ChangeNotifierProvider`），负责根据 `ViewState` 自动展示 loading / error / empty / content。
+`PageShell` 是精简的页面外壳，负责根据 `ViewState` 自动展示 loading / error / empty / content。首次加载时机仍由页面的 `initState` 或异步 Provider 自己管理，`PageShell` 不持有 ViewModel 生命周期。
 
 页面使用 `ConsumerStatefulWidget` + `ref.watch(provider)` 获取 Notifier 状态，通过 `PageShell` 包装 `StateView`：
 
@@ -360,7 +360,7 @@ class _MyPageState extends ConsumerState<MyPage> {
 
 文件：[lib/core/base/paginated_handler.dart](lib/core/base/paginated_handler.dart)
 
-`PaginatedListHandler<T>` 是分页列表处理器，封装了下拉刷新（reset to page 1）和上拉加载更多（append next page）的通用逻辑。
+`PaginatedListHandler<T>` 是分页列表处理器，封装了下拉刷新（reset to page 1）和上拉加载更多（append next page）的通用逻辑。`fetchPage` 会强制收到处理器持有的 `CancelToken`，调用者必须继续透传给 Repository，确保 Notifier 销毁时真正中止网络请求。
 
 使用 `PaginatedListState<T>` 作为 Notifier 的状态类，包含 `items`、`page`、`hasMore`、`isRefreshing`、`isLoadingMore` 等字段。
 
@@ -550,8 +550,8 @@ main.dart
   -> 打开 SQLite 数据库
   -> 执行 DatabaseMigrations
 
-service_locator.dart
-  -> 注册 DatabaseService
+services.dart
+  -> databaseServiceProvider 暴露 DatabaseService
   -> 默认实现 SqliteDatabaseService
 
 Repository
@@ -698,15 +698,15 @@ static Future<void> _createVersion2(DatabaseExecutor db) async {
 6. View 继续只调用 OrderViewModel
 ```
 
-注册依赖时：
+用 Riverpod 组装依赖时：
 
 ```dart
-locator.registerLazySingleton<OrderRepository>(
-  () => OrderRepositoryImpl(
-    apiService: locator(),
-    databaseService: locator(),
-  ),
-);
+final orderRepositoryProvider = Provider<OrderRepository>((ref) {
+  return OrderRepositoryImpl(
+    apiService: ref.watch(apiServiceProvider),
+    databaseService: ref.watch(databaseServiceProvider),
+  );
+});
 ```
 
 这样写之后，`OrderViewModel` 不需要知道订单数据是从网络来的，还是从数据库来的。
@@ -720,7 +720,8 @@ locator.registerLazySingleton<OrderRepository>(
 - 不要让 `Repository` 直接依赖 `sqflite`。
 - 表名和字段名统一放在 `DatabaseTables`。
 - 数据库版本升级统一放在 `DatabaseMigrations`。
-- 单元测试里用 fake `DatabaseService`，不要真的打开 SQLite。
+- Repository 单元测试使用 fake `DatabaseService`，不打开 SQLite。
+- 验证 `SqliteDatabaseService` 适配器本身时，可以使用 FFI 内存数据库做集成测试。
 
 ### 3.4 core/network
 
@@ -952,7 +953,7 @@ print(appInfo.displayVersion); // 1.0.0+1
 - 恢复登录态期间停留在 `/splash`
 - 未匹配路由展示 `NotFoundView`
 
-路由守卫被抽成 `RouteGuard`，通过 `ProviderScope.containerOf(context)` 获取 Riverpod 状态，不再持有 AuthProvider 引用。守卫统一匹配 `/main` 和 `/main/` 前缀，同时保护独立的 `/riverpod-learning`；未来新增 `/main/*` 深层业务页时不需要维护容易漏项的精确白名单。
+路由守卫被抽成 `RouteGuard`。App 层向 `AuthRouteGuard` 注入 `() => ref.read(authProvider)`，守卫本身不查找 `ProviderScope`；路径判断进一步收敛为纯函数，因此可以脱离 Widget 和 GoRouter 单元测试。守卫统一匹配 `/main` 和 `/main/` 前缀，同时保护独立的 `/riverpod-learning`；未来新增 `/main/*` 深层业务页时不需要维护容易漏项的精确白名单。
 
 首页使用 `context.push(RoutePaths.mainCart)` 进入同一 StatefulShellBranch 下的购物车详情，因此保留底部导航和首页返回栈；学习中心从“我的”右上角进入，是 Shell 外的独立受保护页面。
 
@@ -1782,7 +1783,7 @@ flutter run --dart-define=ENV_API_SUCCESS_CODE=200
 
 ## 10. 如何编写单元测试
 
-这个项目的单元测试重点是：**测试业务逻辑，不测试真实网络，也不测试真实数据库**。
+这个项目的测试重点是：**业务单元测试不访问真实网络或设备数据库**。Repository 使用 Fake Service；SQLite 适配器使用独立的 FFI 内存数据库测试 CRUD、事务和异常转换，不接触 App 的真实数据库文件。
 
 测试使用 Riverpod 的 `ProviderContainer` + `overrides` 来替换依赖，替代旧的 get_it `register`/`reset` 模式。
 
@@ -1976,25 +1977,21 @@ class FakeDatabaseService implements DatabaseService {
 }
 ```
 
-测试 Repository 时可以这样注册：
+测试 Repository 时可以这样组装：
 
 ```dart
 setUp(() async {
-  await locator.reset();
-
-  locator.registerLazySingleton<ApiService>(
-    FakeApiService.new,
+  container = ProviderContainer(
+    overrides: [
+      apiServiceProvider.overrideWith((ref) => FakeApiService()),
+      databaseServiceProvider.overrideWith((ref) => FakeDatabaseService()),
+    ],
   );
+  addTearDown(container.dispose);
 
-  locator.registerLazySingleton<DatabaseService>(
-    FakeDatabaseService.new,
-  );
-
-  locator.registerLazySingleton<OrderRepository>(
-    () => OrderRepositoryImpl(
-      apiService: locator(),
-      databaseService: locator(),
-    ),
+  repository = OrderRepositoryImpl(
+    apiService: container.read(apiServiceProvider),
+    databaseService: container.read(databaseServiceProvider),
   );
 });
 ```
@@ -2037,6 +2034,7 @@ Widget 测试可以测：
 可以参考：
 
 - [test/features/login/login_view_model_test.dart](test/features/login/login_view_model_test.dart)
+- [test/features/profile/profile_view_model_test.dart](test/features/profile/profile_view_model_test.dart)
 - [test/features/home/home_view_model_test.dart](test/features/home/home_view_model_test.dart)
 - [test/features/home/home_provider_lifecycle_test.dart](test/features/home/home_provider_lifecycle_test.dart)
 - [test/features/home/catalog_providers_test.dart](test/features/home/catalog_providers_test.dart)
@@ -2048,8 +2046,14 @@ Widget 测试可以测：
 - [test/shared/widgets/riverpod_learning_panel_test.dart](test/shared/widgets/riverpod_learning_panel_test.dart)
 - [test/features/login/login_page_navigation_test.dart](test/features/login/login_page_navigation_test.dart)
 - [test/core/router/app_router_test.dart](test/core/router/app_router_test.dart)
+- [test/core/router/route_guard_test.dart](test/core/router/route_guard_test.dart)
+- [test/core/base/async_request_handler_test.dart](test/core/base/async_request_handler_test.dart)
+- [test/core/base/paginated_handler_test.dart](test/core/base/paginated_handler_test.dart)
+- [test/core/database/sqlite_database_service_test.dart](test/core/database/sqlite_database_service_test.dart)
+- [test/global/auth_provider_test.dart](test/global/auth_provider_test.dart)
+- [test/global/theme_provider_test.dart](test/global/theme_provider_test.dart)
 
-生命周期测试会验证关闭页面 Provider 的最后一个监听者后，进行中的 Dio 请求收到取消信号；业务测试覆盖同步派生状态、购物车共享与确认清空、异步分页/回滚/family 缓存，以及 Future/Stream 服务替换；学习中心测试覆盖阶段状态和窄屏切换。README 不固定记录测试总数，避免新增测试后文档数字失真；以 `flutter test` 实际结果为准。
+生命周期测试会验证关闭页面 Provider 的最后一个监听者后，进行中的 Dio 请求收到取消信号；业务测试覆盖同步派生状态、购物车共享与确认清空、异步分页/回滚/family 缓存，以及 Future/Stream 服务替换；基础设施测试覆盖请求处理器、分页、SQLite 事务、路由守卫和全局会话/主题持久化；学习中心测试覆盖阶段状态和窄屏切换。README 不固定记录测试总数，避免新增测试后文档数字失真；以 `flutter test` 实际结果为准。
 
 ## 11. 工程工具和常用命令
 

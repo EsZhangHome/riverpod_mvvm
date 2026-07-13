@@ -1,11 +1,6 @@
-// lib/core/base/base_page.dart
+// lib/core/base/page_shell.dart
 //
-// 作用：Riverpod 版本的通用页面容器，负责 onReady 回调和 StateView 状态切换。
-//
-// 迁移说明（Provider → Riverpod）：
-// - 旧的 BasePage 依赖 ChangeNotifierProvider + Consumer<VM>
-// - 新的 PageShell 基于 ConsumerStatefulWidget + ref.watch
-// - ViewModel 改为 Notifier，状态改为不可变对象
+// 作用：通用页面展示容器，根据 ViewState 选择内容、加载、空和错误视图。
 //
 // 使用方式：
 // ```dart
@@ -56,12 +51,12 @@ enum LoadingStyle {
 /// 页面内容构建函数类型。
 typedef PageContentBuilder = Widget Function(BuildContext context);
 
-/// 精简的页面外壳：处理 StateView 包装和 onReady 回调。
+/// 精简的页面外壳：统一处理 StateView 包装。
 ///
 /// 不处理 ViewModel 创建（由 NotifierProvider 管理），
 /// 不处理状态监听（由外部 ConsumerStatefulWidget 的 ref.watch 完成）。
 ///
-/// 适用场景：需要 onReady 回调 + StateView 状态切换的页面。
+/// 适用场景：需要统一 StateView 状态切换的页面。
 /// 复杂页面（如带表单、需要管理 TextEditingController）直接用 ConsumerStatefulWidget。
 class PageShell extends StatelessWidget {
   const PageShell({

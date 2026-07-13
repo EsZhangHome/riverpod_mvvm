@@ -10,6 +10,7 @@ void main() {
   testWidgets('app network image shows fallback when url is empty', (
     tester,
   ) async {
+    // Arrange + Act：空 URL 不触发真实网络加载，直接走组件的错误占位分支。
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -18,6 +19,7 @@ void main() {
       ),
     );
 
+    // Assert：所有页面共享同一个不可用图片视觉反馈。
     expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
   });
 }

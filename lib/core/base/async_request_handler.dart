@@ -1,11 +1,6 @@
-// lib/core/base/base_view_model.dart
+// lib/core/base/async_request_handler.dart
 //
-// 作用：提供 ViewModel 通用能力的工具类，替代旧的 ChangeNotifier 基类。
-//
-// 迁移说明（Provider → Riverpod）：
-// - 旧的 BaseViewModel extends ChangeNotifier 已移除
-// - ViewModel 现在改为 Riverpod Notifier，状态是不可变对象
-// - AsyncRequestHandler 封装了防抖、CancelToken、状态切换等通用逻辑
+// 作用：提供 Notifier 常用的请求防重复、取消和状态回调能力。
 //
 // 使用方式：
 // ```dart
@@ -45,7 +40,7 @@ import '../network/api_exception.dart';
 
 /// 异步请求处理器，封装了 ViewModel 常用的请求管理逻辑。
 ///
-/// 提供的能力（等价于旧 BaseViewModel 的方法）：
+/// 提供的能力：
 /// 1. 请求防抖：同一时间只允许一个请求（_isRequesting）
 /// 2. CancelToken 管理：dispose 时自动取消所有请求
 /// 3. 状态切换回调：通过 onLoading/onSuccess/onEmpty/onError 委托给 Notifier

@@ -38,17 +38,15 @@ import 'endpoints.dart';
 /// ApiClient 是网络请求的统一入口。
 ///
 /// Repository 只依赖 ApiService 接口，不直接依赖 ApiClient。
-/// 但通过 get_it 注册时，实际注入的是 ApiClient.instance。
+/// Riverpod 在 services.dart 中把 ApiClient.instance 暴露为 apiClientProvider，
+/// 再由 apiServiceProvider 以 ApiService 接口类型交给 Repository。
 ///
 /// 使用方式：
 /// ```dart
-/// // 在 get_it 中注册
-/// locator.registerLazySingleton<ApiService>(() => ApiClient.instance);
-///
-/// // 在 Repository 中使用
+/// // Repository 构造函数只接收抽象接口。
 /// class HomeRepositoryImpl implements HomeRepository {
 ///   final ApiService _apiService;
-///   // 注意：Repository 依赖的是 ApiService 接口，不是 ApiClient
+///   HomeRepositoryImpl(this._apiService);
 /// }
 /// ```
 class ApiClient implements ApiService {

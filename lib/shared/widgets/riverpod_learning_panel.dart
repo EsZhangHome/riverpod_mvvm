@@ -1,7 +1,7 @@
 // lib/shared/widgets/riverpod_learning_panel.dart
 //
-// 三个业务 Tab 共用的学习导航。它只负责展示，不读取任何 Provider，避免教学 UI
-// 反过来影响业务状态；每个页面仍然通过自己的 ViewModel 演示 Riverpod API。
+// 独立学习中心使用的展示组件。它只接收课程数据，不读取任何 Provider，避免
+// 通用 Widget 反向依赖 learning 业务层；阶段选择仍由页面 ViewModel 管理。
 
 import 'package:flutter/material.dart';
 
@@ -25,7 +25,10 @@ class RiverpodLearningPanel extends StatelessWidget {
     required this.codeEntry,
   });
 
+  /// 当前高亮的展示阶段。
   final RiverpodLearningStage stage;
+
+  /// 五块内容由外部课程 Model 提供，组件不保存业务状态。
   final String scene;
   final String apis;
   final String dataFlow;
@@ -53,6 +56,7 @@ class RiverpodLearningPanel extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             Row(
               children: [
+                // 枚举顺序固定展示“基础 -> 异步 -> 全局”。
                 for (final item in RiverpodLearningStage.values) ...[
                   Expanded(
                     child: _StageBadge(
@@ -134,6 +138,7 @@ class _StageBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    // AnimatedContainer 只做高亮过渡，不承担阶段切换事件。
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       padding: const EdgeInsets.symmetric(
@@ -176,6 +181,7 @@ class _LearningItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 每个条目采用相同的图标、标题、正文结构，保证三站阅读节奏一致。
     return Padding(
       padding: EdgeInsets.only(bottom: isLast ? 0 : AppSpacing.md),
       child: Row(

@@ -2,12 +2,6 @@
 //
 // 作用：全局登录状态管理器，统一管理 token、当前用户、登录/退出/恢复会话。
 //
-// 迁移说明（Provider → Riverpod）：
-// - 旧的 AuthProvider extends ChangeNotifier → 新的 AuthNotifier extends Notifier<AuthState>
-// - notifyListeners() → state = newState（Riverpod 自动通知监听者）
-// - context.watch/read<AuthProvider> → ref.watch/read(authProvider)
-// - GoRouter 的 refreshListenable → 在 _AppView 中 ref.listen 触发路由刷新
-//
 // 数据流保持不变：
 // 登录：LoginPage → authNotifier.loginSuccess(token, user) → state 更新
 // 退出：MinePage → authNotifier.logout() → state 更新

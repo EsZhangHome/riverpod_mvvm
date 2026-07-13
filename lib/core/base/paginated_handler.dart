@@ -17,7 +17,9 @@
 //
 //   Future<void> refresh() async {
 //     await _paginator.refresh(
-//       fetchPage: (page) => ref.read(repoProvider).fetchItems(page: page),
+//       fetchPage: (page, cancelToken) => ref
+//           .read(repoProvider)
+//           .fetchItems(page: page, cancelToken: cancelToken),
 //       currentState: state,
 //       pageSize: 20,
 //       onStateChanged: (s) => state = s,
@@ -26,7 +28,9 @@
 //
 //   Future<void> loadMore() async {
 //     await _paginator.loadMore(
-//       fetchPage: (page) => ref.read(repoProvider).fetchItems(page: page),
+//       fetchPage: (page, cancelToken) => ref
+//           .read(repoProvider)
+//           .fetchItems(page: page, cancelToken: cancelToken),
 //       currentState: state,
 //       pageSize: 20,
 //       onStateChanged: (s) => state = s,
@@ -95,12 +99,14 @@ class PaginatedListHandler<T> {
 
   /// 下拉刷新：重置为第 1 页，清空旧数据，重新加载。
   ///
-  /// [fetchPage]：获取指定页数据的闭包
+  /// [fetchPage]：获取指定页数据的闭包。处理器把自己持有的取消令牌强制传入，
+  /// 调用者再继续透传给 Repository，避免只在表面上支持请求取消。
   /// [currentState]：当前状态（用于判断 hasMore、page 等）
   /// [onStateChanged]：状态变更回调（通常直接赋值 state = newState）
   /// [pageSize]：每页条数，默认 20
   Future<void> refresh({
-    required Future<List<T>> Function(int page) fetchPage,
+    required Future<List<T>> Function(int page, CancelToken cancelToken)
+    fetchPage,
     required PaginatedListState<T> currentState,
     required void Function(PaginatedListState<T> state) onStateChanged,
     int pageSize = 20,
@@ -113,7 +119,7 @@ class PaginatedListHandler<T> {
     );
 
     try {
-      final items = await fetchPage(1);
+      final items = await fetchPage(1, cancelToken);
       if (_isDisposed || cancelToken.isCancelled) return;
       final hasMore = items.length >= pageSize;
       onStateChanged(
@@ -136,7 +142,7 @@ class PaginatedListHandler<T> {
           viewState: currentState.items.isEmpty
               ? ViewState.error
               : ViewState.success, // 有旧数据时不覆盖为 error
-          errorMessage: e is BusinessException ? e.userMessage : e.toString(),
+          errorMessage: _toUserMessage(e),
           isRefreshing: false,
         ),
       );
@@ -147,7 +153,8 @@ class PaginatedListHandler<T> {
 
   /// 上拉加载更多：追加下一页数据。
   Future<void> loadMore({
-    required Future<List<T>> Function(int page) fetchPage,
+    required Future<List<T>> Function(int page, CancelToken cancelToken)
+    fetchPage,
     required PaginatedListState<T> currentState,
     required void Function(PaginatedListState<T> state) onStateChanged,
     int pageSize = 20,
@@ -160,7 +167,7 @@ class PaginatedListHandler<T> {
     onStateChanged(currentState.copyWith(isLoadingMore: true));
 
     try {
-      final newItems = await fetchPage(nextPage);
+      final newItems = await fetchPage(nextPage, cancelToken);
       if (_isDisposed || cancelToken.isCancelled) return;
       final hasMore = newItems.length >= pageSize;
       onStateChanged(
@@ -179,7 +186,7 @@ class PaginatedListHandler<T> {
       }
       onStateChanged(
         currentState.copyWith(
-          errorMessage: e is BusinessException ? e.userMessage : e.toString(),
+          errorMessage: _toUserMessage(e),
           isLoadingMore: false,
         ),
       );
@@ -193,5 +200,13 @@ class PaginatedListHandler<T> {
     if (_isDisposed) return;
     _isDisposed = true;
     if (!cancelToken.isCancelled) cancelToken.cancel('paginator disposed');
+  }
+
+  /// 把基础设施异常收敛成 View 可以直接展示的文案。
+  /// DioException 等未知技术异常不能通过 toString 泄漏到页面。
+  String _toUserMessage(Object error) {
+    if (error is BusinessException) return error.userMessage;
+    if (error is ApiException) return error.message;
+    return '请求失败，请稍后重试';
   }
 }

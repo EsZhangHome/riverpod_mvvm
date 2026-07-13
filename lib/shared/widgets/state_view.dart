@@ -25,7 +25,7 @@
 
 import 'package:flutter/material.dart';
 
-import '../../core/base/base_page.dart';
+import '../../core/base/page_shell.dart';
 import '../../core/base/view_state.dart';
 import 'empty_view.dart';
 import 'error_view.dart';

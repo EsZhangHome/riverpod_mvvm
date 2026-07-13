@@ -10,6 +10,7 @@
 // 路由结构（由 app_router.dart 的 StatefulShellRoute 定义）：
 // /main
 //   ├── /main/home   → 商品目录与购物车
+//   │     └── /main/home/cart → 购物车详情
 //   ├── /main/orders → 订单列表与订单生命周期
 //   └── /main/mine   → 我的与设置
 
@@ -27,9 +28,11 @@ class MainPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // navigationShell 本身是当前分支的 Navigator/Widget 树。
       body: navigationShell,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: navigationShell.currentIndex,
+        // Tab 索引属于路由状态，不再创建只保存 int 的 MainViewModel。
         onTap: (index) => navigationShell.goBranch(
           index,
           // 点击当前 Tab 时回到该分支的初始路由，避免深层嵌套

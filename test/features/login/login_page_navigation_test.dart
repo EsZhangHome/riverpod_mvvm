@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('login success navigates to main page', (tester) async {
+    // Arrange：清空安全存储和普通存储，模拟首次安装。
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     await LocalStorage.init();
@@ -19,6 +20,7 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: MyApp()));
     await tester.pumpAndSettle();
 
+    // Act 1：使用页面默认账号点击登录，等待 AuthNotifier 和 GoRouter 完成。
     await tester.tap(find.byType(ElevatedButton));
     await tester.pumpAndSettle();
 
@@ -38,6 +40,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
+    // Act 2：逐个切换 Tab，验证 StatefulNavigationShell 分支可达。
     await tester.tap(find.text(AppStrings.orders));
     await tester.pumpAndSettle();
     expect(find.text(AppStrings.ordersTitle), findsOneWidget);
@@ -64,3 +67,6 @@ void main() {
     expect(find.text(AppStrings.pageNotFound), findsNothing);
   });
 }
+
+// 登录到主框架的端到端 Widget 测试：覆盖会话写入、三个 Tab、购物车子路由、
+// 独立学习中心以及 /main 兼容重定向，确保路由与 Riverpod 状态一起工作。

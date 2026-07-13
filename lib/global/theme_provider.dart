@@ -1,10 +1,6 @@
 // lib/global/theme_provider.dart
 //
 // 作用：全局主题管理器，管理明暗主题切换，并把用户选择持久化到本地。
-//
-// 迁移说明（Provider → Riverpod）：
-// - 旧的 ThemeProvider extends ChangeNotifier → 新的 ThemeNotifier extends Notifier<ThemeState>
-// - notifyListeners() → state = newState
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,20 +44,13 @@ class ThemeNotifier extends Notifier<ThemeState> {
 
   @override
   ThemeState build() {
-    // 创建 ThemeData 缓存（启动时只创建一次）
-    final state = ThemeState(
+    // LocalStorage 已在 runApp 前初始化，而且读取是同步的。直接用持久化结果
+    // 构造首个 State，可以避免 App 先显示浅色再异步闪到深色。
+    final savedMode = LocalStorage.getString(_themeKey);
+    return ThemeState(
+      themeMode: savedMode == 'dark' ? ThemeMode.dark : ThemeMode.light,
       lightTheme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-    );
-    // 异步加载本地保存的主题模式（Future.microtask：build 期间 state 未就绪）
-    Future.microtask(_loadSavedTheme);
-    return state;
-  }
-
-  Future<void> _loadSavedTheme() async {
-    final savedMode = LocalStorage.getString(_themeKey);
-    state = state.copyWith(
-      themeMode: savedMode == 'dark' ? ThemeMode.dark : ThemeMode.light,
     );
   }
 

@@ -2,15 +2,14 @@
 //
 // 作用：个人中心页面，展示用户详细信息和退出登录入口。
 //
-// 迁移说明（Provider → Riverpod）：
-// - context.watch/read<AuthProvider>() → ref.watch/read(authProvider)
-// - locator<ProfileViewModel>() → profileProvider
+// 页面执行顺序：首帧后读取当前会话用户并加载详情；build 同时 watch
+// AuthState 和 ProfileState；详情未返回时显示基础用户；退出时清理全局会话。
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/base/base_page.dart';
+import '../../../core/base/page_shell.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -29,6 +28,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   @override
   void initState() {
     super.initState();
+    // build 之前不触发业务命令，等待首帧后再安全读取 Provider。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final authState = ref.read(authProvider);
@@ -39,6 +39,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    // AuthState 是全局兜底，ProfileState 是页面级详情。
     final authState = ref.watch(authProvider);
     final profileState = ref.watch(profileProvider);
     final user = profileState.user ?? authState.currentUser;
@@ -46,6 +47,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     return Scaffold(
       appBar: AppBar(title: const Text(AppStrings.profile)),
       body: PageShell(
+        // PageShell 只解释 ViewState，不创建或持有 ViewModel。
         viewState: profileState.viewState,
         errorMessage: profileState.errorMessage,
         onRetry: () => ref
@@ -74,6 +76,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 
   Future<void> _logout() async {
+    // 先清内存和本地 token，再替换到登录路由。
     await ref.read(authProvider.notifier).logout();
     if (mounted) {
       context.go(RoutePaths.login);

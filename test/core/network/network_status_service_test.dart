@@ -27,6 +27,7 @@ void main() {
     });
 
     test('maps multiple connectivity results using plugin priority order', () {
+      // 插件可能同时报告多种连接；项目用固定优先级得到唯一业务状态。
       final status = ConnectivityNetworkStatusService.mapConnectivityResult(
         const [ConnectivityResult.wifi, ConnectivityResult.mobile],
       );

@@ -143,8 +143,7 @@ class ApiException implements Exception {
 /// - message（继承自 ApiException）：与 userMessage 相同
 /// - userMessage：后端返回的、可直接展示给用户的文案
 ///
-/// 在 BaseViewModel.asyncRequest 中，BusinessException 会被特殊处理，
-/// 直接使用 userMessage 展示给用户。
+/// AsyncRequestHandler 会优先读取 userMessage，交给 ViewModel 写入展示状态。
 class BusinessException extends ApiException {
   BusinessException({required super.code, required this.userMessage})
     : super(message: userMessage);

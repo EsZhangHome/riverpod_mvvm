@@ -3,6 +3,13 @@
 // 基础 Tab：一个可操作的商品目录，而不是计数器。
 // 搜索/筛选展示 watch；按钮命令展示 read；购物车提示展示 listen；
 // 单商品数量展示 family+select；购物车汇总展示派生 Provider。
+//
+// 页面执行顺序：
+// 1. watch 筛选后的商品和筛选条件；
+// 2. listen 同步输入框与处理加购 SnackBar；
+// 3. read 各 Notifier 执行搜索、收藏和加购命令；
+// 4. 独立 ConsumerWidget 精确监听购物车角标、汇总和单商品数量；
+// 5. 点击购物车 push 子路由，cartProvider 不会因页面跳转被清空。
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,6 +49,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // 这里只订阅列表构建必需的两个 Provider。
     final products = ref.watch(visibleProductsProvider);
     final filter = ref.watch(catalogFilterProvider);
 
@@ -87,6 +95,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               labelText: AppStrings.searchProducts,
               border: OutlineInputBorder(),
             ),
+            // 每次输入把业务关键字交给 Notifier，派生商品列表随之刷新。
             onChanged: (value) =>
                 ref.read(catalogFilterProvider.notifier).search(value),
           ),
@@ -169,6 +178,7 @@ class _CartActions extends ConsumerWidget {
         Center(child: Text(AppStrings.cartItemCount(count))),
         IconButton(
           tooltip: AppStrings.openCart,
+          // push 保留首页路由栈；返回时搜索、收藏和购物车仍是原状态。
           onPressed: () => context.push(RoutePaths.mainCart),
           icon: const Icon(Icons.shopping_cart_outlined),
         ),
@@ -183,6 +193,7 @@ class _CartSummaryCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 只汇总展示，不提供修改命令；所有修改仍回到 CartNotifier。
     final summary = ref.watch(cartSummaryProvider);
     return Card(
       child: Padding(
@@ -226,6 +237,7 @@ class _ProductCard extends ConsumerWidget {
                 ),
                 IconButton(
                   tooltip: AppStrings.toggleFavorite,
+                  // read Notifier 执行收藏命令，本卡片通过 select 收到结果。
                   onPressed: () => ref
                       .read(favoriteProductIdsProvider.notifier)
                       .toggle(product.id),
@@ -250,6 +262,7 @@ class _ProductCard extends ConsumerWidget {
                   Text('$quantity'),
                 ],
                 IconButton.filledTonal(
+                  // 加购只改 cartProvider；数量、角标、明细和总价自动派生。
                   onPressed: () =>
                       ref.read(cartProvider.notifier).add(product.id),
                   icon: const Icon(Icons.add_shopping_cart),

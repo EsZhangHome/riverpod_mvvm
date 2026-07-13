@@ -11,6 +11,7 @@ import 'package:riverpod_mvvm/shared/models/user_model.dart';
 void main() {
   group('json serializable models', () {
     test('user model parses json with generated code', () {
+      // Arrange + Act：模拟 Repository 收到的 JSON，并交给生成的 fromJson。
       final user = UserModel.fromJson(const {
         'id': '1',
         'name': 'Test User',
@@ -18,6 +19,7 @@ void main() {
         'avatarUrl': 'https://example.com/avatar.png',
       });
 
+      // Assert：字段解析和反向序列化都遵守接口 key。
       expect(user.id, '1');
       expect(user.name, 'Test User');
       expect(user.toJson()['email'], 'test@example.com');

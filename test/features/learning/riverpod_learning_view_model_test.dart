@@ -5,6 +5,7 @@ import 'package:riverpod_mvvm/features/learning/view_model/riverpod_learning_vie
 
 void main() {
   test('学习中心按照基础、异步、全局顺序切换课程', () {
+    // Arrange：每个测试使用独立容器，结束时释放 autoDispose Provider。
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
@@ -15,17 +16,20 @@ void main() {
     );
     addTearDown(subscription.close);
 
+    // Assert 1：build 默认返回基础阶段。
     expect(
       container.read(currentRiverpodLessonProvider).stage,
       RiverpodLessonStage.basic,
     );
 
+    // Act 1：调用 next，派生课程应同步切到异步。
     container.read(riverpodLessonStageProvider.notifier).next();
     expect(
       container.read(currentRiverpodLessonProvider).stage,
       RiverpodLessonStage.async,
     );
 
+    // Act 2：再次 next 到全局。
     container.read(riverpodLessonStageProvider.notifier).next();
     expect(
       container.read(currentRiverpodLessonProvider).stage,
@@ -45,3 +49,6 @@ void main() {
     );
   });
 }
+
+// 学习中心 ViewModel 测试：不挂载 Widget，直接通过 ProviderContainer 验证
+// Notifier 边界保护和派生 currentRiverpodLessonProvider 的联动。

@@ -42,8 +42,9 @@ class AppRouter {
       errorBuilder: (context, state) => const NotFoundView(),
 
       redirect: (BuildContext context, GoRouterState state) {
+        // 守卫按注册顺序执行，第一个返回路径的守卫终止后续判断。
         for (final guard in guards) {
-          final redirectPath = guard.redirect(state, context);
+          final redirectPath = guard.redirect(state);
           if (redirectPath != null) return redirectPath;
         }
         return null;
@@ -60,6 +61,7 @@ class AppRouter {
         ),
         GoRoute(
           path: RoutePaths.riverpodLearning,
+          // 学习中心在 Shell 外，返回时恢复“我的”页面的原分支状态。
           builder: (context, state) => const RiverpodLearningPage(),
         ),
 
@@ -77,6 +79,7 @@ class AppRouter {
                   builder: (context, state) => const HomePage(),
                   routes: [
                     GoRoute(
+                      // 子路由只写相对片段，完整地址为 /main/home/cart。
                       path: RoutePaths.cartSegment,
                       builder: (context, state) => const CartPage(),
                     ),

@@ -14,6 +14,7 @@ class _FakeAuthNotifier extends AuthNotifier {
   );
 
   void switchUser(String id) {
+    // 模拟同一 ProviderContainer 内账号切换，触发用户级状态重建。
     state = AuthState(
       token: 'token-$id',
       currentUser: UserModel(id: id, name: id, email: '$id@test.com'),
@@ -45,6 +46,7 @@ void main() {
   test(
     'catalog filters and cart summary are derived from source providers',
     () {
+      // Arrange：替换全局会话和商品数据，保证价格与 id 可预测。
       final container = ProviderContainer(
         overrides: [
           authProvider.overrideWith(_FakeAuthNotifier.new),
@@ -61,16 +63,19 @@ void main() {
       );
       addTearDown(filterSubscription.close);
 
+      // Act 1：选择手机分类，visibleProductsProvider 应只剩手机。
       container
           .read(catalogFilterProvider.notifier)
           .selectCategory(ProductCategory.phone);
       expect(container.read(visibleProductsProvider).single.id, 'phone');
 
+      // Act 2：添加两台手机和一个键盘，汇总应从 cartProvider 派生。
       container.read(cartProvider.notifier)
         ..add('phone')
         ..add('phone')
         ..add('keyboard');
 
+      // Assert：总数、总价、family 数量与详情行必须一致。
       final summary = container.read(cartSummaryProvider);
       expect(summary.totalQuantity, 3);
       expect(summary.totalPrice, 220);
@@ -83,6 +88,7 @@ void main() {
   );
 
   test('普通浏览收藏只通知目标订阅，切换账号会清理用户级状态', () async {
+    // Arrange：统计 visibleProductsProvider 实际通知次数。
     final container = ProviderContainer(
       overrides: [
         authProvider.overrideWith(_FakeAuthNotifier.new),
@@ -101,6 +107,7 @@ void main() {
     );
     addTearDown(visibleSubscription.close);
 
+    // Act 1：普通浏览时收藏不应重算整个列表；搜索会。
     container.read(favoriteProductIdsProvider.notifier).toggle('phone');
     container.read(cartProvider.notifier).add('phone');
     container.read(catalogFilterProvider.notifier).search('测试手机');
@@ -111,6 +118,7 @@ void main() {
     expect(container.read(favoriteProductIdsProvider), {'phone'});
     expect(container.read(cartProvider), {'phone': 1});
 
+    // Act 2：切换账号，依赖 currentUserIdProvider 的状态全部重建。
     (container.read(authProvider.notifier) as _FakeAuthNotifier).switchUser(
       'user-b',
     );
@@ -121,3 +129,6 @@ void main() {
     expect(container.read(cartProvider), isEmpty);
   });
 }
+
+// 商品目录 Provider 单元测试：通过 Fake Auth/Repository 验证筛选、收藏、购物车、
+// 派生明细和用户会话边界，不依赖任何 Widget 或平台插件。

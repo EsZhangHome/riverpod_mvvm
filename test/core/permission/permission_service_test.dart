@@ -25,6 +25,7 @@ void main() {
     });
 
     test('limited permission is treated as usable', () {
+      // iOS 相册 limited 仍可继续选择已授权照片，不应按 denied 处理。
       const result = AppPermissionResult(
         type: AppPermissionType.photos,
         status: AppPermissionStatus.limited,
