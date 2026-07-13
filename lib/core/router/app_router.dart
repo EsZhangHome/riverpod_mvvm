@@ -9,11 +9,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/community/view/community_page.dart';
 import '../../features/home/view/home_page.dart';
+import '../../features/home/view/cart_page.dart';
+import '../../features/learning/view/riverpod_learning_page.dart';
 import '../../features/login/view/login_page.dart';
 import '../../features/main/view/main_page.dart';
 import '../../features/mine/view/mine_page.dart';
+import '../../features/orders/view/orders_page.dart';
 import '../../shared/widgets/loading_view.dart';
 import '../../shared/widgets/not_found_view.dart';
 import 'route_guard.dart';
@@ -56,6 +58,10 @@ class AppRouter {
           path: RoutePaths.splash,
           builder: (context, state) => const Scaffold(body: LoadingView()),
         ),
+        GoRoute(
+          path: RoutePaths.riverpodLearning,
+          builder: (context, state) => const RiverpodLearningPage(),
+        ),
 
         // 主框架：StatefulShellRoute 管理三个 Tab 分支
         // GoRouter 的 StatefulNavigationShell 保证子页面不会因为 Tab 切换而销毁
@@ -63,25 +69,31 @@ class AppRouter {
           builder: (context, state, navigationShell) =>
               MainPage(navigationShell: navigationShell),
           branches: [
-            // Tab 0：首页
+            // Tab 0：商品目录与购物车
             StatefulShellBranch(
               routes: [
                 GoRoute(
                   path: RoutePaths.mainHome,
                   builder: (context, state) => const HomePage(),
+                  routes: [
+                    GoRoute(
+                      path: RoutePaths.cartSegment,
+                      builder: (context, state) => const CartPage(),
+                    ),
+                  ],
                 ),
               ],
             ),
-            // Tab 1：社区
+            // Tab 1：订单列表与订单生命周期
             StatefulShellBranch(
               routes: [
                 GoRoute(
-                  path: RoutePaths.mainCommunity,
-                  builder: (context, state) => const CommunityPage(),
+                  path: RoutePaths.mainOrders,
+                  builder: (context, state) => const OrdersPage(),
                 ),
               ],
             ),
-            // Tab 2：我的
+            // Tab 2：我的与设置
             StatefulShellBranch(
               routes: [
                 GoRoute(
@@ -91,6 +103,11 @@ class AppRouter {
               ],
             ),
           ],
+        ),
+        // 兼容业务代码或外部深链中的 /main，避免它落入 404 页面。
+        GoRoute(
+          path: RoutePaths.main,
+          redirect: (context, state) => RoutePaths.mainHome,
         ),
       ],
     );

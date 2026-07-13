@@ -1,81 +1,186 @@
 // lib/features/mine/view/mine_page.dart
 //
-// 作用：我的 Tab 页面，展示用户信息和退出登录入口。
-//
-// 迁移说明（Provider → Riverpod）：
-// - context.watch<AuthProvider>() → ref.watch(authProvider)
-// - context.read<AuthProvider>().logout() → ref.read(authProvider.notifier).logout()
+// 第三站强调“作用域”：
+// - authProvider/themeProvider 是 App 级状态，切换 Tab 或路由后仍然存在；
+// - appInfo/networkStatus 是页面消费的异步服务状态，离开后可自动释放；
+// - View 通过 select 降低对大型全局 State 的依赖。
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/base/base_page.dart';
 import '../../../core/l10n/app_strings.dart';
+import '../../../core/network/network_status_service.dart';
 import '../../../core/router/route_paths.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../global/auth_provider.dart';
-import '../../../shared/widgets/user_info_card.dart';
+import '../../../global/theme_provider.dart';
 import '../view_model/mine_view_model.dart';
 
-class MinePage extends ConsumerStatefulWidget {
+class MinePage extends ConsumerWidget {
   const MinePage({super.key});
 
   @override
-  ConsumerState<MinePage> createState() => _MinePageState();
-}
-
-class _MinePageState extends ConsumerState<MinePage> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final authState = ref.read(authProvider);
-        ref.read(mineProvider.notifier).loadMine(authState.currentUser);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-    final mineState = ref.watch(mineProvider);
-    final user = mineState.user ?? authState.currentUser;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessionDescription = ref.watch(sessionDescriptionProvider);
+    final themeMode = ref.watch(
+      themeProvider.select((state) => state.themeMode),
+    );
+    final appInfo = ref.watch(appInfoProvider);
+    final network = ref.watch(networkStatusProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text(AppStrings.mine)),
-      body: PageShell(
-        viewState: mineState.viewState,
-        errorMessage: mineState.errorMessage,
-        onRetry: () =>
-            ref.read(mineProvider.notifier).loadMine(authState.currentUser),
-        builder: (context) {
-          return ListView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            children: [
-              UserInfoCard(name: user?.name, email: user?.email),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: () => _logout(),
-                icon: const Icon(Icons.logout),
-                label: const Text(AppStrings.logout),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
-          );
-        },
+      appBar: AppBar(
+        title: const Text(AppStrings.mineTitle),
+        actions: [
+          IconButton(
+            tooltip: AppStrings.openRiverpodLearning,
+            onPressed: () => context.push(RoutePaths.riverpodLearning),
+            icon: const Icon(Icons.school_outlined),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        children: [
+          const _ScopeTitle(
+            index: 1,
+            title: AppStrings.appNotifierTitle,
+            description: AppStrings.appNotifierDescription,
+          ),
+          _InfoCard(icon: Icons.account_circle, text: sessionDescription),
+          const SizedBox(height: AppSpacing.lg),
+          const _ScopeTitle(
+            index: 2,
+            title: AppStrings.selectGlobalStateTitle,
+            description: AppStrings.selectGlobalStateDescription,
+          ),
+          Card(
+            child: SwitchListTile(
+              value: themeMode == ThemeMode.dark,
+              title: const Text(AppStrings.globalDarkTheme),
+              subtitle: const Text(AppStrings.globalDarkThemeDescription),
+              onChanged: (_) => ref.read(themeProvider.notifier).toggleTheme(),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          const _ScopeTitle(
+            index: 3,
+            title: AppStrings.futureServiceTitle,
+            description: AppStrings.futureServiceDescription,
+          ),
+          appInfo.when(
+            loading: () => const _InfoCard(
+              icon: Icons.info_outline,
+              text: AppStrings.readingAppInfo,
+            ),
+            error: (error, _) => const _InfoCard(
+              icon: Icons.error_outline,
+              text: AppStrings.appInfoReadFailed,
+            ),
+            data: (info) => _InfoCard(
+              icon: Icons.apps,
+              text:
+                  '${info.appName}\n${info.packageName}\n${info.displayVersion}',
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          const _ScopeTitle(
+            index: 4,
+            title: AppStrings.streamServiceTitle,
+            description: AppStrings.streamServiceDescription,
+          ),
+          network.when(
+            loading: () => const _InfoCard(
+              icon: Icons.network_check,
+              text: AppStrings.checkingNetwork,
+            ),
+            error: (error, _) => const _InfoCard(
+              icon: Icons.signal_wifi_bad,
+              text: AppStrings.networkListenFailed,
+            ),
+            data: (status) => _InfoCard(
+              icon: status.isConnected ? Icons.wifi : Icons.wifi_off,
+              text: _networkLabel(status.type),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          OutlinedButton.icon(
+            onPressed: () => ref.invalidate(appInfoProvider),
+            icon: const Icon(Icons.refresh),
+            label: const Text(AppStrings.reloadAppInfo),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          FilledButton.tonalIcon(
+            onPressed: () => _logout(context, ref),
+            icon: const Icon(Icons.logout),
+            label: const Text(AppStrings.logout),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _logout() async {
+  String _networkLabel(NetworkConnectionType type) {
+    return AppStrings.currentConnection(_networkTypeLabel(type));
+  }
+
+  String _networkTypeLabel(NetworkConnectionType type) => switch (type) {
+    NetworkConnectionType.wifi => AppStrings.connectionWifi,
+    NetworkConnectionType.mobile => AppStrings.connectionMobile,
+    NetworkConnectionType.ethernet => AppStrings.connectionEthernet,
+    NetworkConnectionType.bluetooth => AppStrings.connectionBluetooth,
+    NetworkConnectionType.satellite => AppStrings.connectionSatellite,
+    NetworkConnectionType.vpn => AppStrings.connectionVpn,
+    NetworkConnectionType.other => AppStrings.connectionOther,
+    NetworkConnectionType.none => AppStrings.connectionNone,
+  };
+
+  Future<void> _logout(BuildContext context, WidgetRef ref) async {
     await ref.read(authProvider.notifier).logout();
-    if (mounted) {
-      context.go(RoutePaths.login);
-    }
+    if (context.mounted) context.go(RoutePaths.login);
+  }
+}
+
+class _ScopeTitle extends StatelessWidget {
+  const _ScopeTitle({
+    required this.index,
+    required this.title,
+    required this.description,
+  });
+  final int index;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(child: Text('$index')),
+      title: Text(title),
+      subtitle: Text(description),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            Icon(icon),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(child: Text(text)),
+          ],
+        ),
+      ),
+    );
   }
 }

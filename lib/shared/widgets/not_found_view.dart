@@ -34,7 +34,7 @@ class NotFoundView extends StatelessWidget {
             const Text(AppStrings.pageNotFound),
             const SizedBox(height: 16),
             // 返回首页按钮
-            // RoutePaths.home 是 /main 的别名，回到登录后的主页面
+            // RoutePaths.home 直接指向真实存在的商品 Tab 路由。
             ElevatedButton(
               onPressed: () => context.go(RoutePaths.home),
               child: const Text(AppStrings.backHome),

@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:riverpod_mvvm/app.dart';
+import 'package:riverpod_mvvm/core/l10n/app_strings.dart';
+import 'package:riverpod_mvvm/core/router/route_paths.dart';
 import 'package:riverpod_mvvm/core/storage/local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,8 +22,45 @@ void main() {
     await tester.tap(find.byType(ElevatedButton));
     await tester.pumpAndSettle();
 
-    expect(find.text('首页'), findsWidgets);
-    expect(find.text('社区'), findsWidgets);
+    expect(find.text('商品'), findsWidgets);
+    expect(find.text('订单'), findsWidgets);
     expect(find.text('我的'), findsWidgets);
+    expect(find.text(AppStrings.learningPathTitle), findsNothing);
+
+    // 加购后点击购物车应进入详情页，不能再把购物车当成清空按钮。
+    await tester.tap(find.byIcon(Icons.add_shopping_cart).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip(AppStrings.openCart));
+    await tester.pumpAndSettle();
+    expect(find.text(AppStrings.cartTitle), findsOneWidget);
+    expect(find.text('旗舰手机'), findsOneWidget);
+    expect(find.text(AppStrings.cartTotal(1, '5999.00')), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(AppStrings.orders));
+    await tester.pumpAndSettle();
+    expect(find.text(AppStrings.ordersTitle), findsOneWidget);
+    expect(find.text(AppStrings.learningPathTitle), findsNothing);
+
+    await tester.tap(find.text(AppStrings.mine));
+    await tester.pumpAndSettle();
+    expect(find.text(AppStrings.mineTitle), findsOneWidget);
+
+    // 学习说明从业务 Tab 正文移出，只通过“我的”右上角独立入口进入。
+    expect(find.text(AppStrings.learningPathTitle), findsNothing);
+    await tester.tap(find.byTooltip(AppStrings.openRiverpodLearning));
+    await tester.pumpAndSettle();
+    expect(find.text(AppStrings.learningCenterTitle), findsOneWidget);
+    expect(find.text(AppStrings.learningPathTitle), findsOneWidget);
+    expect(find.text(AppStrings.basicLearningScene), findsOneWidget);
+
+    // /main 是兼容入口，必须明确重定向到真实的首个分支，不能落入 404。
+    tester
+        .element(find.text(AppStrings.learningCenterTitle))
+        .go(RoutePaths.main);
+    await tester.pumpAndSettle();
+    expect(find.text(AppStrings.catalogTitle), findsOneWidget);
+    expect(find.text(AppStrings.pageNotFound), findsNothing);
   });
 }

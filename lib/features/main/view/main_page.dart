@@ -9,9 +9,9 @@
 //
 // 路由结构（由 app_router.dart 的 StatefulShellRoute 定义）：
 // /main
-//   ├── /main/home     → HomePage
-//   ├── /main/community → CommunityPage
-//   └── /main/mine     → MinePage
+//   ├── /main/home   → 商品目录与购物车
+//   ├── /main/orders → 订单列表与订单生命周期
+//   └── /main/mine   → 我的与设置
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -37,15 +37,15 @@ class MainPage extends StatelessWidget {
         ),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home),
+            icon: Icon(Icons.storefront_outlined),
             label: AppStrings.home,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.forum),
-            label: AppStrings.community,
+            icon: Icon(Icons.receipt_long_outlined),
+            label: AppStrings.orders,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person),
+            icon: Icon(Icons.person_outline),
             label: AppStrings.mine,
           ),
         ],

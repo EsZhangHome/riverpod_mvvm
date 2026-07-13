@@ -160,3 +160,11 @@ class AuthNotifier extends Notifier<AuthState> {
 final authProvider = NotifierProvider<AuthNotifier, AuthState>(
   AuthNotifier.new,
 );
+
+/// 当前登录用户 id 的最小派生状态。
+///
+/// 用户级缓存只依赖这个 Provider：同一用户刷新 token 不会清缓存，退出或切换账号
+/// 时 id 变化会让依赖它的购物车、收藏、订单 Repository 自动重建。
+final currentUserIdProvider = Provider<String?>((ref) {
+  return ref.watch(authProvider.select((state) => state.currentUser?.id));
+});

@@ -53,15 +53,6 @@ abstract class RouteGuard {
 class AuthRouteGuard implements RouteGuard {
   const AuthRouteGuard();
 
-  /// 受保护页面（需要登录才能访问）
-  /// /main 是 StatefulShellRoute 外壳，/main/home 为实际首页 Tab
-  static const _protectedRoutes = {
-    RoutePaths.main,
-    RoutePaths.mainHome,
-    RoutePaths.mainCommunity,
-    RoutePaths.mainMine,
-  };
-
   @override
   String? redirect(GoRouterState state, BuildContext context) {
     // 通过 ProviderScope 获取当前登录状态
@@ -70,7 +61,11 @@ class AuthRouteGuard implements RouteGuard {
 
     final isLoginRoute = state.matchedLocation == RoutePaths.login;
     final isSplashRoute = state.matchedLocation == RoutePaths.splash;
-    final isProtectedRoute = _protectedRoutes.contains(state.matchedLocation);
+    // 统一保护 /main 后代路由以及从“我的”进入的学习中心。
+    final isProtectedRoute =
+        state.matchedLocation == RoutePaths.main ||
+        state.matchedLocation.startsWith('${RoutePaths.main}/') ||
+        state.matchedLocation == RoutePaths.riverpodLearning;
 
     // 规则 0：恢复登录态期间停留在启动页
     if (authState.isRestoringSession) {

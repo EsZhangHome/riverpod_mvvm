@@ -7,7 +7,10 @@ void main() {
     expect(RoutePaths.login, '/login');
     expect(RoutePaths.main, '/main');
     expect(RoutePaths.mainHome, '/main/home');
-    expect(RoutePaths.mainCommunity, '/main/community');
+    expect(RoutePaths.mainCart, '/main/home/cart');
+    expect(RoutePaths.home, RoutePaths.mainHome);
+    expect(RoutePaths.mainOrders, '/main/orders');
     expect(RoutePaths.mainMine, '/main/mine');
+    expect(RoutePaths.riverpodLearning, '/riverpod-learning');
   });
 }
