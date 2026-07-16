@@ -2,6 +2,11 @@
 
 import 'dart:io';
 
+/// 读取 lcov 报告并执行覆盖率门禁。
+///
+/// [arguments] 支持 `--minimum 55` 或 `--minimum=55`；不传时阈值为 55%。脚本只读
+/// coverage/lcov.info，不会运行测试。报告不存在返回 64，没有手写行返回 65，低于
+/// 阈值返回 1，满足要求保持 0。
 void main(List<String> arguments) {
   final minimum = _minimumFrom(arguments);
   final report = File('coverage/lcov.info');
@@ -42,6 +47,7 @@ void main(List<String> arguments) {
   if (percentage < minimum) exitCode = 1;
 }
 
+/// 从 [arguments] 读取最小百分比，同时兼容空格与等号两种 CLI 写法。
 double _minimumFrom(List<String> arguments) {
   for (var index = 0; index < arguments.length; index++) {
     final argument = arguments[index];
@@ -55,6 +61,7 @@ double _minimumFrom(List<String> arguments) {
   return 55;
 }
 
+/// 把 [value] 解析为 0～100 的百分比；无效值打印错误并立即退出。
 double _parseMinimum(String value) {
   final parsed = double.tryParse(value);
   if (parsed == null || parsed < 0 || parsed > 100) {
@@ -64,6 +71,7 @@ double _parseMinimum(String value) {
   return parsed;
 }
 
+/// 判断 lcov 中的 [source] 是否为不应计入业务覆盖率的生成代码路径。
 bool _isGenerated(String source) {
   final normalized = source.replaceAll('\\', '/');
   return normalized.endsWith('.g.dart') ||

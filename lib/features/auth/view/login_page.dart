@@ -26,6 +26,11 @@ import '../view_model/login_view_model.dart';
 /// - 成功后的长期会话由 App 级 authProvider 管理；
 /// - 页面离开时 LoginNotifier 会释放请求处理器并取消未完成请求。
 class LoginPage extends ConsumerStatefulWidget {
+  /// 创建登录页。
+  ///
+  /// [key] 是 Flutter 用来识别 Widget 身份的可选键，通常由路由框架管理；业务调用
+  /// 不需要手工传。页面没有接收“登录成功跳转地址”，因为跳转目标由统一路由守卫
+  /// 根据 AppRouteBundle 决定，认证模块不应知道项目首页路径。
   const LoginPage({super.key});
 
   @override
@@ -45,6 +50,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     super.dispose();
   }
 
+  /// 构建当前登录界面。
+  ///
+  /// [context] 只用于读取 Theme、MediaQuery 等 Widget 树信息；Riverpod 状态使用
+  /// State 自带的 [ref] 读取。每次 loginProvider 状态变化都会重新执行 build，但两个
+  /// TextEditingController 保存在 State 中，不会因重建而丢失用户输入。
   @override
   Widget build(BuildContext context) {
     // watch 建立订阅：ViewState 或错误文案变化时页面自动重建。
@@ -129,6 +139,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     // 这里故意不写 `context.go('/main/home')`：登录页属于通用 auth 模块，
     // 不应该知道任何项目的具体首页。AuthState 更新后，MyApp 的
-    // ref.listen 会通知 GoRouter 重新执行守卫，再由入口路由包决定首页。
+    // App 根部的 ref.listenManual 会通知 GoRouter 重新执行守卫，再由当前登录页
+    // returnTo 或入口路由包的 authenticatedHome 决定最终目标。
   }
 }

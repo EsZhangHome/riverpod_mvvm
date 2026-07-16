@@ -11,6 +11,11 @@
 /// [cause] 保存原始异常，方便日志系统记录真实原因。
 /// [stackTrace] 保存原始堆栈，方便定位是哪一次数据库操作出错。
 class DatabaseException implements Exception {
+  /// 创建稳定的数据库边界异常。
+  ///
+  /// [message] 描述正在执行的高层操作，例如“查询数据失败”；[cause] 和
+  /// [stackTrace] 保存插件原始诊断信息。UI 只应依据 FailureMessageResolver 显示
+  /// 通用存储错误，不能把本对象 toString 直接展示给用户。
   const DatabaseException(this.message, {this.cause, this.stackTrace});
 
   /// 易读的错误消息。

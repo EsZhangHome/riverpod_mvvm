@@ -6,16 +6,37 @@
 
 /// 跨网络、存储和业务模块都能理解的稳定失败分类。
 enum FailureKind {
+  /// 无网、DNS、连接拒绝等网络可达性问题。
   network,
+
+  /// 连接、发送或接收超过限定时间。
   timeout,
+
+  /// 服务端或网关返回异常状态。
   server,
+
+  /// 登录失效、凭据过期或未认证。
   authentication,
+
+  /// 已认证但没有执行当前操作的权限。
   permission,
+
+  /// 本地输入或领域参数校验失败。
   validation,
+
+  /// 请求成功到达后端，但业务规则拒绝执行。
   business,
+
+  /// 数据库、普通偏好或安全存储失败。
   storage,
+
+  /// 调用方主动取消或生命周期结束，不应当作普通失败提示。
   cancellation,
+
+  /// 服务端响应结构、字段类型或版本与客户端契约不一致。
   protocol,
+
+  /// 无法安全归类的兜底失败。
   unknown,
 }
 
@@ -24,6 +45,13 @@ enum FailureKind {
 /// Service/Repository 可以把 Dio、SQLite 或平台插件异常转换成它，ViewModel 只按
 /// [kind] 决定页面状态，不需要 import 三方异常类型。用户文案由 shared 层解析。
 class AppFailure implements Exception {
+  /// 创建跨层稳定失败。
+  ///
+  /// - [kind]：展示层和状态工具依赖的稳定类别；
+  /// - [debugMessage]：仅供日志/监控的技术描述；
+  /// - [failureCode]：可选 HTTP、业务或本地错误码；
+  /// - [suggestedMessage]：只有明确审核为可展示内容时才填写；
+  /// - [cause]：被包装的原始异常，帮助监控追踪根因。
   const AppFailure({
     required this.kind,
     required this.debugMessage,

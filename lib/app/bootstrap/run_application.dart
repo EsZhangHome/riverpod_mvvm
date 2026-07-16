@@ -28,6 +28,18 @@ typedef AppRootBuilder = Widget Function(Widget child);
 ///
 /// [rootBuilder] 是项目组合入口：正式项目可用 ProviderScope 包装 child，替换响应
 /// 协议、Token 刷新、监控预热任务或测试依赖，不必修改底座内部 Provider。
+///
+/// 参数说明：
+/// - [routeBundle]：必填，描述登录后首页、登录页、业务路由和受保护路径；
+/// - [rootBuilder]：可选，在 BootstrapGate 外包装根 Widget，主要用于创建外层
+///   ProviderScope 并提供项目级 overrides；回调必须把收到的 child 放回 Widget 树；
+/// - [logSink]：可选的结构化日志输出端；为空时使用仅 Debug 输出的 DebugLogSink；
+/// - [crashReportingBackend]：可选崩溃平台适配器；这里只完成注入，耗时 initialize
+///   仍由首帧后的 AppWarmup 调用；
+/// - [performanceReporter]：可选性能上报实现；提供后才注册帧、网络、启动等指标。
+///
+/// 返回的 Future 只表示同步启动编排已经执行到 runApp。它不会等待 Bootstrap、
+/// 登录态恢复、Warmup 或首页网络请求完成。
 Future<void> runApplication(
   AppRouteBundle routeBundle, {
   AppRootBuilder? rootBuilder,

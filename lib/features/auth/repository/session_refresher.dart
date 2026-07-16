@@ -11,6 +11,10 @@
 abstract interface class SessionRefresher {
   /// 返回新 token 表示刷新成功；返回 null 表示会话不可恢复，需要退出登录。
   /// 实现时建议使用不带 UnauthorizedInterceptor 的独立客户端，避免刷新递归。
+  ///
+  /// 本方法没有参数，是因为 refresh token、Cookie 或 SDK 会话应封装在具体实现中，
+  /// 不能由通用网络层读取。若调用失败可以抛异常，AuthNotifier 会把它当作刷新失败；
+  /// 任何实现都不应返回旧 token 冒充刷新成功。
   Future<String?> refreshAccessToken();
 }
 

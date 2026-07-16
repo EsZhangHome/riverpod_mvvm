@@ -16,11 +16,19 @@ import 'database_service.dart';
 /// 默认从 AppDatabase 获取数据库实例。
 /// 测试时也可以传入自定义 databaseProvider。
 class SqliteDatabaseService extends _SqliteExecutorService {
-  /// 不直接保存 Database，而是注入异步获取函数：生产环境复用 AppDatabase，
-  /// 测试可以传入内存数据库，也不会把 sqflite 初始化传播到 Repository。
+  /// 创建 sqflite 版 DatabaseService。
+  ///
+  /// [databaseProvider] 是“需要执行 SQL 时怎样异步取得 Database”的函数：
+  /// - null：默认读取 AppDatabase.database；
+  /// - 测试传入：可以返回 sqflite_common_ffi 的内存 Database；
+  /// - Provider 组合层传入：可以延迟读取 appDatabaseProvider.future。
+  ///
+  /// 这里注入函数而不是立即传 Database，目的是保留懒加载。构造本 Service 不会
+  /// 打开文件，第一次 CRUD 获取 executor 时才真正触发数据库初始化。
   SqliteDatabaseService({Future<Database> Function()? databaseProvider})
     : _databaseProvider = databaseProvider ?? (() => AppDatabase.database);
 
+  /// 每次数据库操作获取 executor 的入口。默认函数最终会复用 AppDatabase 单例。
   final Future<Database> Function() _databaseProvider;
 
   @override
@@ -140,6 +148,10 @@ abstract class _SqliteExecutorService implements DatabaseService {
   }
 
   /// 统一捕获 sqflite 异常，并转换成 DatabaseException。
+  ///
+  /// [message] 是不包含 SQL 参数的稳定操作说明；[action] 是真正的数据库动作。
+  /// 已经转换过的 DatabaseException 原样上抛，其他插件异常保留 cause/stack 后包装，
+  /// 避免事务嵌套时一层层重复包装。
   Future<T> _guard<T>(String message, Future<T> Function() action) async {
     try {
       return await action();

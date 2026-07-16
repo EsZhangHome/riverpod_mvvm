@@ -9,24 +9,22 @@
 //
 // 路由结构：
 // /login            → 登录页
-// /splash           → 登录态恢复页
-// /starter          → 等待真实项目替换的起始页
+// /session-restoring → 安全会话恢复页
 
 /// 路由路径集中管理。
 ///
 /// 底座内置路由结构：
 /// /login            → 登录页
-/// /splash           → 启动页（恢复登录态时）
-/// /starter          → 尚未接入真实首页时的受保护占位页
+/// /session-restoring → 只在读取安全会话期间显示的内部页面
 class RoutePaths {
   const RoutePaths._();
 
   /// 登录页路径。
   static const String login = '/login';
 
-  /// 启动页路径（恢复登录态期间展示）。
-  static const String splash = '/splash';
-
-  /// 新项目尚未接入真实业务首页时使用的默认受保护页面。
-  static const String starter = '/starter';
+  /// 安全会话恢复页。
+  ///
+  /// 这个地址不是原生启动图，也不是 BootstrapGate。BootstrapGate 完成环境校验和
+  /// 普通存储初始化后，GoRouter 才使用本页面等待 SecureStorage 会话恢复。
+  static const String sessionRestoring = '/session-restoring';
 }

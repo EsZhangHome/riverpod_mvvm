@@ -12,6 +12,11 @@ import '../localization/app_strings.dart';
 ///
 /// `abstract final` 表示它只是静态工具命名空间；页面和 ViewModel 不需要创建实例。
 abstract final class FailureMessageResolver {
+  /// 把任意 [error] 转为适合直接显示给最终用户的中文文案。
+  ///
+  /// 返回规则按优先级执行：可信业务文案 → AppFailure 建议文案 → FailureKind 固定文案
+  /// → 未知异常兜底文案。方法绝不会把 `error.toString()`、URL、响应体或堆栈返回给
+  /// View。技术细节应由请求边界上报 CrashReporter，而不是显示在页面上。
   static String resolve(Object error) {
     // BusinessException 的文案由业务后端明确返回，允许优先展示；普通 HTTP 500
     // 的 message 可能包含网关或数据库信息，不能走这个分支直接泄露给用户。

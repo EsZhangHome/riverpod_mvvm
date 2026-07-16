@@ -31,6 +31,10 @@ import 'token_refresh_coordinator.dart';
 /// Repository 已通过 RequestContext 提供 id 时原样透传；没有时在客户端生成。
 /// 同一个 id 同时放进 Header 和 Dio extra：服务端能串联日志，客户端拦截器也能读取。
 class RequestMetadataInterceptor extends Interceptor {
+  /// 进程内递增序号，与微秒时间戳组合以降低同一时刻请求 ID 冲突概率。
+  ///
+  /// 这不是跨设备全局唯一 UUID。若公司网关要求特定 trace-id 格式，应由调用方在
+  /// `RequestContext.requestId` 中传入，拦截器会尊重该值而不覆盖。
   static int _sequence = 0;
 
   @override
@@ -61,6 +65,10 @@ class RequestMetadataInterceptor extends Interceptor {
 /// - 退出登录后 token 变为 null，需要立即反映到请求中
 /// - 这样不需要在每次登录/退出后重新创建 Dio 实例
 class TokenInterceptor extends Interceptor {
+  /// 创建 Token 注入拦截器。
+  ///
+  /// [tokenProvider] 是同步回调，每次请求发送前执行一次。使用回调而不是直接传
+  /// token，是为了让同一个 Dio 在登录、刷新和退出后都能读取到最新认证状态。
   TokenInterceptor({required this.tokenProvider});
 
   /// token 提供者，由上层组合代码注入；拦截器不知道具体认证状态实现。
@@ -173,6 +181,11 @@ class AppLogInterceptor extends Interceptor {
 /// 使用 _isHandling 标记，只有第一次 401 会触发 onUnauthorized 回调，
 /// 后续的 401 会被忽略，直到 reset() 被调用（用户重新登录后）。
 class UnauthorizedGuard {
+  /// 创建并发 401 去重守卫。
+  ///
+  /// [onUnauthorized] 只负责“会话确定失效后的业务处理”，通常是清除本地会话；
+  /// 不要在基础设施回调中保存页面 BuildContext 或直接 push 登录页，路由应通过
+  /// 监听认证状态自行重定向。
   UnauthorizedGuard({required this.onUnauthorized});
 
   /// 会话确定失效时的回调，通常由组合层绑定退出登录命令。
@@ -185,6 +198,9 @@ class UnauthorizedGuard {
   ///
   /// 如果 _isHandling 为 true，直接返回不做任何操作。
   /// 如果 _isHandling 为 false，设置为 true 并调用 onUnauthorized。
+  ///
+  /// 注意：回调执行失败后 `_isHandling` 仍保持 true，目的是避免同一批失败请求形成
+  /// 退出风暴；恢复会话或重新登录后必须由组合层显式调用 [reset]。
   Future<void> handle() async {
     if (_isHandling) {
       // 已经处理过 401，跳过，避免重复 logout
@@ -222,6 +238,14 @@ class UnauthorizedGuard {
 /// - 真正的退出登录逻辑由上层回调实现，网络层不 import 认证模块
 /// - 只有重放成功时 resolve 响应，其余 401 继续传递给调用方
 class UnauthorizedInterceptor extends Interceptor {
+  /// 创建 401 刷新与安全重放拦截器。
+  ///
+  /// 参数说明：
+  /// - [guard]：并发会话失效去重器，确保一批 401 只清理一次会话；
+  /// - [dio]：用于通过 `dio.fetch` 重放原请求的同一个 Dio 实例；
+  /// - [refreshAccessToken]：可选刷新函数。成功返回新 token，不支持刷新时传 null；
+  /// - [refreshCoordinator]：合并并发刷新操作的协调器。生产通常不传，测试可以注入
+  ///   独立实例验证并发行为。
   UnauthorizedInterceptor({
     required this.guard,
     required this.dio,
@@ -231,8 +255,15 @@ class UnauthorizedInterceptor extends Interceptor {
 
   /// 会话失效守卫，确保一批 401 只触发一次退出处理。
   final UnauthorizedGuard guard;
+
+  /// 发送原请求重放的客户端。必须与触发当前拦截器的 Dio 为同一实例，才能保留
+  /// baseUrl、适配器、超时和完整拦截器链。
   final Dio dio;
+
+  /// 刷新访问令牌的可选回调；null 表示直接把 401 视为会话失效。
   final RefreshAccessToken? refreshAccessToken;
+
+  /// 并发刷新协调器：刷新进行中时，后续 401 复用同一个 Future。
   final TokenRefreshCoordinator refreshCoordinator;
 
   @override
@@ -300,6 +331,14 @@ class UnauthorizedInterceptor extends Interceptor {
 /// - 使用 dio.fetch 复用原始 RequestOptions，保持参数不变
 /// - replayDisabled 请求不参与重试
 class RetryInterceptor extends Interceptor {
+  /// 创建临时网络错误重试拦截器。
+  ///
+  /// 参数说明：
+  /// - [dio]：用于重放原始 RequestOptions 的同一个 Dio 实例；
+  /// - [retryCount]：最多“额外尝试”的次数，不包含第一次请求。null 时读取
+  ///   [EnvConfig.retryCount]，0 表示完全不重试；
+  /// - [retryDelays]：每次重试前等待的秒数。列表不能空；重试次数超过列表长度时
+  ///   会重复使用最后一个值，例如 `[1, 2]` 且重试 4 次时依次等待 1、2、2、2 秒。
   RetryInterceptor({required this.dio, int? retryCount, List<int>? retryDelays})
     : retryCount = retryCount ?? EnvConfig.retryCount,
       retryDelays = retryDelays ?? const [1, 2] {
@@ -311,7 +350,9 @@ class RetryInterceptor extends Interceptor {
   /// Dio 实例，用于重新发起请求。
   final Dio dio;
 
-  /// 最大重试次数，超过后不再重试。
+  /// 最大额外重试次数，第一次正常请求不计入该数字。
+  ///
+  /// 负数没有业务意义，项目配置应保持大于等于 0；当前实现会把负数等价为不重试。
   final int retryCount;
 
   /// 重试退避延迟（秒），[1, 2] 表示第 1 次重试等 1 秒，第 2 次等 2 秒。

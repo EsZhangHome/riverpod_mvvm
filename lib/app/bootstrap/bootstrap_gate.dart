@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/env_config.dart';
 import '../../l10n/app_localizations.dart';
+import '../../shared/ui/loading_view.dart';
 import '../app.dart';
 import '../navigation/app_route_bundle.dart';
 import 'app_bootstrap.dart';
@@ -28,12 +29,15 @@ final bootstrapResultProvider = Provider<BootstrapResult>(
 ///
 /// [bootstrap] 可在测试中替换；[routeBundle] 由具体项目入口注入业务路由。
 class BootstrapGate extends StatefulWidget {
-  const BootstrapGate({
-    super.key,
-    this.bootstrap,
-    this.routeBundle = const AppRouteBundle.starter(),
-  });
+  /// 创建启动门。
+  ///
+  /// - [bootstrap]：可选的启动用例。正式运行为空即可；Widget 测试可注入假实现，
+  ///   避免启动真实 SharedPreferences；
+  /// - [routeBundle]：当前项目的完整路由组合，启动成功后原样传给 MyApp；
+  /// - [key]：Flutter 标准 Widget 标识，通常无需传入。
+  const BootstrapGate({super.key, this.bootstrap, required this.routeBundle});
 
+  /// 可替换的关键启动用例；null 时在首次启动或重试时创建默认 AppBootstrap。
   final AppBootstrap? bootstrap;
 
   /// 当前项目的业务路由组合。
@@ -66,7 +70,7 @@ class _BootstrapGateState extends State<BootstrapGate> {
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           // 启动失败也会被 AppBootstrap 转成 BootstrapResult，因此这里只表示等待中。
-          return const _BootstrapMaterialApp(child: _BootstrapLoadingView());
+          return const _BootstrapMaterialApp(child: LoadingView());
         }
 
         final result = snapshot.data!;
@@ -81,7 +85,7 @@ class _BootstrapGateState extends State<BootstrapGate> {
 
         // 关键启动任务已经结束，现在才创建业务 ProviderScope。
         // overrideWithValue 让所有业务 Provider 共享同一份不可变启动结果；
-        // 非关键预热会由 MyApp 在首帧之后触发，不延长当前等待页面的时间。
+        // 非关键预热会由 MyApp 按“首帧后/会话完成后”分级触发，不延长当前等待时间。
         return ProviderScope(
           // 启动结果由当前 Gate 写入内层 Scope，业务 Provider 可以直接读取。
           // 项目入口若有外层 ProviderScope overrides，这里会自然继承。
@@ -96,6 +100,7 @@ class _BootstrapGateState extends State<BootstrapGate> {
 class _BootstrapMaterialApp extends StatelessWidget {
   const _BootstrapMaterialApp({required this.child});
 
+  /// 启动中或启动失败时需要显示的主体内容。
   final Widget child;
 
   @override
@@ -112,19 +117,13 @@ class _BootstrapMaterialApp extends StatelessWidget {
   }
 }
 
-class _BootstrapLoadingView extends StatelessWidget {
-  const _BootstrapLoadingView();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: CircularProgressIndicator());
-  }
-}
-
 class _BootstrapFailureView extends StatelessWidget {
   const _BootstrapFailureView({required this.result, required this.onRetry});
 
+  /// failed 启动结果，用于提取稳定阶段名；不会直接显示原始异常。
   final BootstrapResult result;
+
+  /// 用户点击重试后的回调；BootstrapGate 会创建新 Future 并重新执行启动流程。
   final VoidCallback onRetry;
 
   @override

@@ -34,6 +34,13 @@ import '../config/env_config.dart';
 /// 如果实际后端字段名不同（如 code 叫 status、data 叫 result），应替换
 /// ResponseAdapter，而不是让每个 Repository 自己解释协议。
 class ApiResponse<T> {
+  /// 创建统一响应结果。
+  ///
+  /// - [code]：业务码或 HTTP 状态码，由当前 ResponseAdapter 定义；
+  /// - [message]：服务端/HTTP 诊断消息，不代表默认可以展示；
+  /// - [data]：已经由 Repository decoder 转换的 T，允许接口成功但无 body 时为 null；
+  /// - [successOverride]：Adapter 已完成的成功判断；null 才使用 EnvConfig 兜底；
+  /// - [canDisplayMessage]：message 是否经过协议安全保证并允许进入 UI。
   ApiResponse({
     required this.code,
     required this.message,
@@ -52,6 +59,8 @@ class ApiResponse<T> {
   /// 响应数据，类型由泛型 T 决定。
   /// 成功时包含业务数据，失败时可能为 null。
   final T? data;
+
+  /// Adapter 给出的最终成功判定。null 只用于手工创建/便捷工厂的兼容场景。
   final bool? successOverride;
 
   /// true 表示后端协议明确保证 message 已脱敏，可直接展示给用户。

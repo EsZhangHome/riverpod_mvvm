@@ -19,14 +19,25 @@ import '../model/login_response.dart';
 
 /// 登录数据源契约。ViewModel 依赖接口，测试可以注入 Fake Repository。
 abstract class LoginRepository {
-  /// [cancelToken] 从页面级请求处理器透传，页面销毁时可中止真实 Dio 请求。
+  /// 校验凭据并返回登录结果。
+  ///
+  /// - [request]：已由 ViewModel 完成空值校验的账号密码请求对象；
+  /// - [cancelToken]：从页面级请求处理器透传，页面销毁时可中止真实 Dio 请求。
+  ///
+  /// 成功返回包含 token/user 的 [LoginResponse]；失败抛出统一网络/业务异常，由
+  /// AsyncRequestHandler 映射为用户文案。Repository 不返回 ViewState，也不弹提示。
   Future<LoginResponse> login(LoginRequest request, {CancelToken? cancelToken});
 }
 
 /// 根据编译环境在 Mock 与真实接口之间切换的 Repository 实现。
 class LoginRepositoryImpl implements LoginRepository {
+  /// 创建真实/Mock 可切换的登录仓库。
+  ///
+  /// [_apiService] 由 Provider 注入。即使当前编译环境开启 Mock 也仍注入该依赖，
+  /// 这样关闭 Mock 后无需改对象结构，单元测试也能稳定替换网络端口。
   LoginRepositoryImpl(this._apiService);
 
+  /// 网络抽象，只负责发送请求和解析统一响应，不包含页面或认证状态。
   final ApiService _apiService;
 
   @override

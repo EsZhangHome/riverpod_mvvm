@@ -1,6 +1,5 @@
 {
   "@@locale": "zh",
-  "starterMessage": "企业项目底座已启动。请用第一个业务 Feature 替换此页面。",
   "initializationFailed": "应用初始化失败",
   "failedStages": "失败阶段：{stages}",
   "@failedStages": {

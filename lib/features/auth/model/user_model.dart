@@ -21,6 +21,13 @@ part 'user_model.g.dart';
 /// 代表一个登录用户的基本信息，所有需要展示用户信息的模块都可以使用。
 @JsonSerializable()
 class UserModel {
+  /// 创建不可变用户模型。
+  ///
+  /// 参数说明：
+  /// - [id]：服务端用户唯一标识，应稳定且非空；用户级缓存通常使用它隔离数据；
+  /// - [name]：页面展示名称，不应拿来代替 id 判断是否同一用户；
+  /// - [email]：联系邮箱。若项目不需要邮箱，应按真实领域模型调整而非长期填空串；
+  /// - [avatarUrl]：可空头像地址，null 表示没有头像，View 应展示占位图。
   const UserModel({
     required this.id,
     required this.name,
@@ -73,6 +80,10 @@ class UserModel {
   /// ```dart
   /// final updatedUser = user.copyWith(name: 'New Name');
   /// ```
+  ///
+  /// 所有参数为 null 时表示“沿用旧值”。因此当前方法不能把已有 [avatarUrl] 主动
+  /// 改成 null；若真实业务需要“删除头像”，建议改用可区分未传值与显式 null 的
+  /// copyWith 方案，而不是误以为 `copyWith(avatarUrl: null)` 会清空。
   UserModel copyWith({
     String? id,
     String? name,

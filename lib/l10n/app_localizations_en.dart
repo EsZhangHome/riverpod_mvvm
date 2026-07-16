@@ -9,10 +9,6 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get starterMessage =>
-      'The enterprise starter is ready. Replace this page with your first business feature.';
-
-  @override
   String get initializationFailed => 'Application initialization failed';
 
   @override

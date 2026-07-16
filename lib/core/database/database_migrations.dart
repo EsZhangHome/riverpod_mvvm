@@ -28,6 +28,7 @@ class DatabaseMigrations {
   ///
   /// 如果当前版本是 3，这里会依次执行 version 1、2、3 的迁移，
   /// 保证新安装用户能一次性得到完整结构。
+  /// [db] 是 sqflite 刚打开的数据库；[version] 是 openDatabase 配置的目标版本。
   static Future<void> onCreate(Database db, int version) async {
     for (var targetVersion = 1; targetVersion <= version; targetVersion++) {
       await _runMigration(db, targetVersion);
@@ -38,6 +39,8 @@ class DatabaseMigrations {
   ///
   /// 例如用户手机里是 version 1，新包是 version 3，
   /// 这里会执行 version 2 和 version 3 的迁移。
+  /// [oldVersion] 来自设备已有文件，[newVersion] 来自 [currentVersion]。
+  /// 每一步必须能在事务中连续执行，不能依赖页面或网络状态。
   static Future<void> onUpgrade(
     Database db,
     int oldVersion,

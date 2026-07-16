@@ -18,6 +18,10 @@ import 'package:flutter/material.dart';
 /// 居中展示 CircularProgressIndicator，适用于所有页面的 loading 状态。
 /// 通过 StateView 统一调用，业务页面不需要直接使用这个组件。
 class LoadingView extends StatelessWidget {
+  /// 创建占满父布局并把进度指示器居中的加载视图。
+  ///
+  /// [key] 仅用于 Widget 身份识别。本组件没有文案/颜色参数，是为了让全局样式由
+  /// Theme 控制；业务需要骨架屏时可以直接替换 shared 实现或建立专用组件。
   const LoadingView({super.key});
 
   @override

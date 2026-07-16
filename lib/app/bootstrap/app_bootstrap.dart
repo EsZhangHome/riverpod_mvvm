@@ -14,7 +14,12 @@ import '../../core/storage/local_storage.dart';
 import '../../core/performance/performance_reporter.dart';
 import '../../core/utils/crash_reporter.dart';
 
-/// ready：全部正常；degraded：非关键能力失败但可继续；failed：禁止进入业务。
+/// 关键启动流程的最终状态。
+///
+/// - [ready]：所有关键准备步骤成功，可以正常创建业务 Widget 树；
+/// - [degraded]：非安全关键步骤失败，但已有明确降级方案，例如普通偏好不可用时
+///   回退到默认主题，因此仍允许进入 App；
+/// - [failed]：继续启动可能使用不安全配置，目前会停留在启动失败页。
 enum BootstrapStatus { ready, degraded, failed }
 
 /// 一个启动阶段的失败记录。
@@ -22,6 +27,12 @@ enum BootstrapStatus { ready, degraded, failed }
 /// 这里保存诊断信息，不负责决定页面文案。这样启动页可以显示安全提示，监控平台
 /// 仍能拿到原始错误和堆栈定位问题。
 class BootstrapIssue {
+  /// 创建一条启动失败记录。
+  ///
+  /// - [stage]：稳定阶段名，例如 `configuration`、`storage`，用于 UI 和监控聚合；
+  /// - [error]：真正捕获到的异常对象，只用于诊断，不直接显示给用户；
+  /// - [stackTrace]：异常发生时的调用栈；
+  /// - [isCritical]：true 表示该失败必须阻止进入业务，false 表示允许降级。
   const BootstrapIssue({
     required this.stage,
     required this.error,
@@ -31,7 +42,11 @@ class BootstrapIssue {
 
   /// 稳定阶段名用于页面提示和监控聚合，不直接使用异常类型当阶段名。
   final String stage;
+
+  /// 原始异常。页面不得直接调用 toString 展示，避免泄露配置和设备细节。
   final Object error;
+
+  /// 原始调用栈，供 CrashReporter 或远程监控定位失败代码。
   final StackTrace stackTrace;
 
   /// critical 表示继续启动可能不安全；当前配置错误属于 critical。
@@ -40,20 +55,31 @@ class BootstrapIssue {
 
 /// 关键启动任务的不可变结果，也是 BootstrapGate 与业务 ProviderScope 的交接对象。
 class BootstrapResult {
+  /// 创建启动结果。
+  ///
+  /// [status] 决定是否允许进入业务；[issues] 保存本次所有已捕获问题。调用方应
+  /// 传入不可变列表，AppBootstrap 已通过 List.unmodifiable 保证这一点。
   const BootstrapResult({required this.status, this.issues = const []});
 
+  /// 无任何启动问题时的便捷构造函数。
   const BootstrapResult.ready()
     : status = BootstrapStatus.ready,
       issues = const [];
 
+  /// 本次启动的总体状态。
   final BootstrapStatus status;
+
+  /// 本次启动捕获到的问题；ready 时为空，degraded/failed 时至少包含一项。
   final List<BootstrapIssue> issues;
 
   /// degraded 仍允许启动，页面可通过 bootstrapResultProvider 展示降级提示。
   bool get canStart => status != BootstrapStatus.failed;
 }
 
-/// 可以被测试替换的异步启动步骤。
+/// 可以被测试或项目组合层替换的异步启动步骤。
+///
+/// 返回的 Future 完成表示步骤成功；抛出异常表示失败，由 AppBootstrap 统一分类、
+/// 上报并决定降级，而不是让 action 自己操作启动页面。
 typedef BootstrapAction = Future<void> Function();
 
 /// 环境校验是纯同步计算，单独定义类型可避免测试依赖真实 dart-define。
@@ -69,6 +95,13 @@ class AppBootstrap {
   /// 两个 action 都允许从构造函数替换，不是为了增加抽象层，而是为了让测试
   /// 不必真的启动 SharedPreferences。测试注入普通闭包，就能稳定验证成功、
   /// 配置阻断和存储降级三条路径。
+  ///
+  /// - [validateConfiguration]：同步安全校验。为空时调用 EnvConfig.ensureValid；
+  ///   一旦抛错会直接返回 failed，不再执行存储初始化。
+  /// - [initializeStorage]：准备普通偏好存储。为空时调用 LocalStorage.init；失败会
+  ///   记录为 degraded，因为主题仍能使用默认值、安全会话仍走 SecureStorage。
+  /// - [stageTimeout]：单个异步阶段最多等待多久，默认 5 秒。超时只结束当前等待并
+  ///   进入降级流程，Dart Future 本身不具备强制中止底层插件工作的能力。
   AppBootstrap({
     ConfigurationAction? validateConfiguration,
     BootstrapAction? initializeStorage,
@@ -78,6 +111,8 @@ class AppBootstrap {
 
   final ConfigurationAction _validateConfiguration;
   final BootstrapAction _initializeStorage;
+
+  /// 每个异步启动阶段的最长等待时间，而不是整个 App 的总启动时限。
   final Duration stageTimeout;
 
   static Future<void> _initializeLocalStorage() async {
@@ -89,6 +124,15 @@ class AppBootstrap {
     }
   }
 
+  /// 按固定顺序执行配置校验和最小存储初始化。
+  ///
+  /// 本方法不向外抛出已知启动异常，而是将其转换成 [BootstrapResult]：
+  /// - 配置异常 → failed；
+  /// - 普通存储异常或超时 → degraded；
+  /// - 全部成功 → ready。
+  ///
+  /// 原始异常会同步交给 CrashReporter。调用方只需根据 result.canStart 决定显示
+  /// 失败页还是创建业务 ProviderScope。
   Future<BootstrapResult> initialize() async {
     final issues = <BootstrapIssue>[];
 

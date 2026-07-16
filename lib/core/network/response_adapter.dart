@@ -15,7 +15,14 @@ import 'api_response.dart';
 /// 这是网络基础设施与业务 Repository 之间的“翻译器”。Repository 提供 decoder
 /// 把业务 data 转成 Model；Adapter 只解释成功码、消息和 data 在响应中的位置。
 abstract interface class ResponseAdapter {
-  /// [decoder] 由 Repository 提供，只解析真正的业务 data，不解析外层协议。
+  /// 把一次 Dio Response 转换为统一 `ApiResponse<T>`。
+  ///
+  /// - [response]：包含 HTTP 状态、Header 和原始 body 的 Dio 响应；
+  /// - [decoder]：由 Repository 提供，只解析真正的业务 data，不解析外层协议；
+  /// - 返回值：携带统一 code/message/data 和明确成功判定的 ApiResponse。
+  ///
+  /// 协议字段类型不合法或 decoder 抛错时应继续抛出，由 ApiClient 转成 protocol
+  /// failure；Adapter 不应静默制造空 Model 掩盖后端契约变化。
   ApiResponse<T> adapt<T>(
     Response<dynamic> response,
     T Function(dynamic json)? decoder,
@@ -24,6 +31,18 @@ abstract interface class ResponseAdapter {
 
 /// 兼容 `{code, message, data}`，同时允许普通对象/数组直接作为响应体。
 class EnvelopeResponseAdapter implements ResponseAdapter {
+  /// 创建可配置的业务外壳适配器。
+  ///
+  /// - [codeKey]：业务码字段名，默认 `code`；
+  /// - [messageKey]：业务提示字段名，默认 `message`；
+  /// - [dataKey]：真正业务数据字段名，默认 `data`；
+  /// - [successCode]：业务码模式下代表成功的整数；
+  /// - [useHttpStatus]：true 时只按 HTTP 2xx 判断成功，false 时按 [successCode]；
+  /// - [trustBusinessMessage]：是否允许失败 message 最终进入 UI，默认 false。只有
+  ///   后端明确保证脱敏、可本地化且不含内部细节时才能开启。
+  ///
+  /// 如果响应 Map 根本没有 [codeKey]，本适配器把整个 body 当普通 REST 数据，而
+  /// 不是强行读取 dataKey。
   const EnvelopeResponseAdapter({
     this.codeKey = 'code',
     this.messageKey = 'message',
@@ -33,12 +52,22 @@ class EnvelopeResponseAdapter implements ResponseAdapter {
     this.trustBusinessMessage = false,
   });
 
-  /// 字段名和成功码可配置，避免为 `status/result/msg` 等协议复制整个类。
+  /// 业务码字段名。
   final String codeKey;
+
+  /// 业务提示字段名。
   final String messageKey;
+
+  /// 业务数据字段名。
   final String dataKey;
+
+  /// 业务码模式下代表成功的 code。
   final int successCode;
+
+  /// true 使用 HTTP 2xx；false 使用业务 [successCode]。
   final bool useHttpStatus;
+
+  /// 是否把外壳 message 标记为经过服务端安全保证、允许展示。
   final bool trustBusinessMessage;
 
   @override
@@ -84,6 +113,10 @@ class EnvelopeResponseAdapter implements ResponseAdapter {
 }
 
 /// 完全依赖 HTTP 状态码、响应体就是业务数据的 REST 适配器。
+///
+/// 适合 `GET /users/1` 直接返回 `{id, name}` 的后端，不读取 code/message/data。
+/// 2xx 判定成功，整个 body 交给 decoder；HTTP statusMessage 只保留为诊断信息，
+/// 默认不会直接展示给用户。
 class DirectResponseAdapter implements ResponseAdapter {
   const DirectResponseAdapter();
 

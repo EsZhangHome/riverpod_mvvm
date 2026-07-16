@@ -39,7 +39,10 @@ import 'package:flutter/material.dart';
 import '../state/view_state.dart';
 import 'state_view.dart';
 
-/// 页面内容构建函数类型。
+/// 页面正常内容构建函数类型。
+///
+/// [context] 是 PageShell 当前所在位置的 BuildContext，可读取 Theme/MediaQuery；
+/// 返回值一般是 Scaffold 或页面主体。它不是 ViewModel 构造函数，也不接收 Ref。
 typedef PageContentBuilder = Widget Function(BuildContext context);
 
 /// 精简的页面外壳：统一处理 StateView 包装。
@@ -50,6 +53,19 @@ typedef PageContentBuilder = Widget Function(BuildContext context);
 /// 适用场景：需要统一 StateView 状态切换的页面。
 /// 复杂页面（如带表单、需要管理 TextEditingController）直接用 ConsumerStatefulWidget。
 class PageShell extends StatelessWidget {
+  /// 创建带统一状态切换能力的页面外壳。
+  ///
+  /// 参数说明：
+  /// - [viewState]：ViewModel 输出的页面阶段；
+  /// - [builder]：idle/success 或 overlay 底层显示的正常页面；
+  /// - [errorMessage]：error 状态下的安全提示；
+  /// - [onRetry]：可选重试命令，null 时错误页没有按钮；
+  /// - [loadingStyle]：首次加载通常 replace，表单提交通常 overlay；
+  /// - [key]：可选 Widget 身份键。
+  ///
+  /// 即使 replace loading/error/empty 当前不会显示正常内容，`builder(context)` 仍会在
+  /// build 时执行后作为 child 传给 StateView。因此 builder 应只构建 Widget，不要在
+  /// 里面发请求或执行副作用。
   const PageShell({
     super.key,
     required this.viewState,
@@ -59,19 +75,19 @@ class PageShell extends StatelessWidget {
     this.loadingStyle = LoadingStyle.replace,
   });
 
-  /// 当前页面状态（来自 Notifier 的 state.viewState）
+  /// 当前页面状态（来自 Notifier 的 state.viewState）。
   final ViewState viewState;
 
-  /// 正常内容构建器
+  /// 正常内容构建器。
   final PageContentBuilder builder;
 
-  /// 错误提示文案
+  /// 错误提示文案，仅 error 状态使用。
   final String errorMessage;
 
-  /// 重试回调（ErrorView 点击重试按钮时调用）
+  /// 重试回调（ErrorView 点击重试按钮时调用）。
   final VoidCallback? onRetry;
 
-  /// loading 展示方式，默认 replace
+  /// loading 展示方式，默认 replace。
   final LoadingStyle loadingStyle;
 
   @override

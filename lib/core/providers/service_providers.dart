@@ -35,18 +35,30 @@ import '../network/response_adapter.dart';
 import '../permission/permission_service.dart';
 import '../storage/secure_storage_service.dart';
 
-/// 后端协议适配器。不同项目只需 override 此 Provider。
+/// 后端外层响应协议适配器。
+///
+/// 默认解析 `{code, message, data}`，也兼容普通 REST body。若公司的字段名、成功码
+/// 或 data 包装完全不同，应在项目最外层 ProviderScope override 本 Provider，而不是
+/// 修改每个 Repository。ApiClient 通过 watch 订阅它，override 后会使用新适配器。
 final responseAdapterProvider = Provider<ResponseAdapter>(
   (ref) => const EnvelopeResponseAdapter(),
 );
 
-/// 网络客户端由 Riverpod 容器拥有，不依赖静态单例，测试和多环境可以替换。
+/// 持有 Dio、拦截器和连接配置的网络客户端。
+///
+/// 生命周期属于当前 ProviderContainer：首次被读取时创建，容器销毁时通过
+/// ref.onDispose 关闭 Dio。测试可 override 成注入 MockAdapter 的 ApiClient。
+/// 业务 Repository 不应直接读取本 Provider，应依赖下面的 apiServiceProvider。
 final apiClientProvider = Provider<ApiClient>((ref) {
   final client = ApiClient(responseAdapter: ref.watch(responseAdapterProvider));
   ref.onDispose(client.close);
   return client;
 });
 
+/// Repository 面向的网络抽象入口。
+///
+/// 返回类型故意声明为 ApiService，隐藏 ApiClient 的大部分实现细节。这里用 watch
+/// 而不是 read，使测试 override apiClientProvider 后，本 Provider 能同步重建。
 final apiServiceProvider = Provider<ApiService>(
   // watch 表示 ApiClient Provider 如果被测试 override，ApiService 也同步重建。
   (ref) => ref.watch(apiClientProvider),
@@ -64,6 +76,7 @@ final appDatabaseProvider = FutureProvider<Database>((ref) {
 /// 数据库服务（在当前 ProviderContainer 内共享，创建时不打开数据库）。
 ///
 /// Repository 依赖抽象接口 DatabaseService，而不是直接依赖 sqflite。
+/// 测试可 override 为 FakeDatabaseService；业务无需启动平台数据库插件。
 final databaseServiceProvider = Provider<DatabaseService>(
   // SqliteDatabaseService 只保存“如何获取数据库”的闭包。真正执行 query/insert
   // 时才读取 FutureProvider，所以登录页和不使用本地缓存的项目不会为 SQLite
@@ -76,6 +89,7 @@ final databaseServiceProvider = Provider<DatabaseService>(
 /// 网络状态服务（在当前 ProviderContainer 内共享）。
 ///
 /// 统一封装 connectivity_plus，业务代码不直接依赖三方库。
+/// Provider 只创建服务对象，真正的平台监听在 watchStatus 被消费时才开始。
 final networkStatusServiceProvider = Provider<NetworkStatusService>(
   (ref) => ConnectivityNetworkStatusService(),
 );
@@ -83,6 +97,7 @@ final networkStatusServiceProvider = Provider<NetworkStatusService>(
 /// 权限服务（在当前 ProviderContainer 内共享）。
 ///
 /// 统一封装 permission_handler。
+/// 测试 override 后可以验证授权/拒绝分支而不弹系统权限框。
 final permissionServiceProvider = Provider<PermissionService>(
   (ref) => PermissionHandlerService(),
 );
@@ -90,11 +105,15 @@ final permissionServiceProvider = Provider<PermissionService>(
 /// App 信息服务（在当前 ProviderContainer 内共享）。
 ///
 /// 统一封装 package_info_plus。
+/// 实现内部缓存首次平台读取结果；页面通常再用 FutureProvider 暴露 AsyncValue。
 final appInfoServiceProvider = Provider<AppInfoService>(
   (ref) => PackageInfoAppInfoService(),
 );
 
-/// 敏感数据存储。认证模块通过自己的 SessionStore 再封装会话语义。
+/// 敏感键值存储（在当前 ProviderContainer 内共享）。
+///
+/// 这里仅提供 read/write/delete 能力，不知道 token、用户或会话版本。认证模块应再
+/// 通过 SessionStore 封装完整会话语义；普通业务不要直接散落安全存储 key。
 final secureStorageServiceProvider = Provider<SecureStorageService>(
   (ref) => FlutterSecureStorageService(),
 );

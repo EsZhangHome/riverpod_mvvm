@@ -52,10 +52,19 @@ import '../errors/failure_message_resolver.dart';
 /// 每个 ViewModel Notifier 在 build() 中创建一个实例，
 /// 并在 ref.onDispose 中调用 dispose() 取消请求。
 class AsyncRequestHandler {
+  /// 创建一个只管理“一条请求通道”的处理器。
+  ///
+  /// 一个 Handler 同时只执行一个 request，适合登录、保存、首次加载等互斥命令。
+  /// 同一 ViewModel 若有两个可以并行的独立操作，应分别创建两个 Handler；不要为了
+  /// 复用而让互不相关的请求互相阻塞。
+  AsyncRequestHandler();
+
   // ==================== 私有状态 ====================
 
   /// 是否正在执行请求（互斥标记）。
   bool _isRequesting = false;
+
+  /// Handler 是否已经结束生命周期；结束后 execute 永远返回 null。
   bool _isDisposed = false;
 
   // ==================== 公开属性 ====================
@@ -74,12 +83,20 @@ class AsyncRequestHandler {
   ///
   /// [onLoading]：请求开始时调用，通常设置 state.viewState = loading
   /// [onSuccess]：请求成功且有数据时调用
-  /// [onEmpty]：请求成功但数据为空时调用（不传则走 onSuccess）
+  /// [onEmpty]：请求成功但数据为空时调用；只有同时传 [isEmpty] 才可能触发
   /// [onError]：请求失败时调用，message 已转换为对用户友好的文案
   ///
   /// [isEmpty]：判断数据是否为空的回调，如 (data) => data.isEmpty
   ///
-  /// 返回值：成功时返回数据，失败/重复调用/取消时返回 null
+  /// 返回值：成功时返回数据，失败/重复调用/取消/销毁时返回 null。
+  ///
+  /// 重要边界：
+  /// - 如果 [isEmpty] 返回 true 但 [onEmpty] 没传，方法仍返回 data，只是不执行
+  ///   onSuccess；因此使用空状态判断时应配套提供 onEmpty；
+  /// - onLoading/onSuccess/onEmpty/onError 都是同步回调，通常只更新 Notifier.state，
+  ///   不要在里面再次发起未等待的异步操作；
+  /// - T 本身若允许 null，`T?` 返回值无法区分“成功得到 null”和“请求未执行/失败”，
+  ///   这种业务应把结果包装成明确 Model，而不要把 T 定义为可空类型。
   Future<T?> execute<T>({
     required Future<T> Function() request,
     required void Function() onLoading,
@@ -141,6 +158,9 @@ class AsyncRequestHandler {
   // ==================== 生命周期 ====================
 
   /// 释放资源，取消所有使用此 token 的 Dio 请求。
+  ///
+  /// 可重复调用；只有第一次真正取消。调用后 Handler 不可复用，一般在 Notifier.build
+  /// 中通过 `ref.onDispose(_handler.dispose)` 注册，不能等 Widget 自己手工清理。
   void dispose() {
     if (_isDisposed) return;
     _isDisposed = true;

@@ -98,12 +98,6 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
-  /// No description provided for @starterMessage.
-  ///
-  /// In zh, this message translates to:
-  /// **'企业项目底座已启动。请用第一个业务 Feature 替换此页面。'**
-  String get starterMessage;
-
   /// No description provided for @initializationFailed.
   ///
   /// In zh, this message translates to:

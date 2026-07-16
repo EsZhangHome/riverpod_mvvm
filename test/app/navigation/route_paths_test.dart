@@ -5,9 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/shared/navigation/route_paths.dart';
 
 void main() {
-  test('starter route paths contain only framework infrastructure', () {
+  test('route paths contain only universal framework infrastructure', () {
     expect(RoutePaths.login, '/login');
-    expect(RoutePaths.splash, '/splash');
-    expect(RoutePaths.starter, '/starter');
+    expect(RoutePaths.sessionRestoring, '/session-restoring');
   });
 }

@@ -13,15 +13,27 @@ typedef LegacyUserClearer = Future<void> Function();
 
 /// 登录会话持久化端口。
 abstract interface class SessionStore {
+  /// 读取完整会话；没有已保存会话时返回 null，数据损坏时允许抛解析异常。
   Future<AuthSession?> read();
 
+  /// 原子保存 [session]。完成前 AuthNotifier 不会把内存状态切成已登录。
   Future<void> write(AuthSession session);
 
+  /// 删除全部认证凭据。重复调用必须安全，目标状态始终是“本地无会话”。
   Future<void> clear();
 }
 
 /// 把一个完整会话序列化到单个安全存储 key。
 class SecureSessionStore implements SessionStore {
+  /// 创建安全会话存储实现。
+  ///
+  /// 参数说明：
+  /// - [_storage]：Keychain/Keystore 的抽象适配器，负责真正的安全读写；
+  /// - [readLegacyUserJson]：可选旧版用户 JSON 读取函数，仅用于从早期普通存储迁移；
+  /// - [clearLegacyUser]：可选旧版用户数据清理函数，迁移成功、数据残缺或退出时调用。
+  ///
+  /// 新项目可以只传 `_storage`。两个 legacy 参数不能用于新业务数据，它们只是保证
+  /// 已安装旧版本的设备平滑升级，未来确认不再支持旧版本后可连同迁移代码删除。
   const SecureSessionStore(
     this._storage, {
     LegacyUserJsonReader? readLegacyUserJson,
@@ -32,12 +44,25 @@ class SecureSessionStore implements SessionStore {
        // ignore: prefer_initializing_formals
        _clearLegacyUser = clearLegacyUser;
 
+  /// 当前完整会话使用的安全存储 key；后缀 v1 对应 AuthSession JSON 协议版本。
   static const _sessionKey = 'auth_session_v1';
+
+  /// 旧版本只保存 token 时使用的 key，仅为一次性兼容迁移保留。
   static const _legacyTokenKey = 'auth_token';
+
+  /// 平台安全存储端口。
   final SecureStorageService _storage;
+
+  /// 旧版普通存储读取回调；null 表示项目没有需要迁移的旧用户数据。
   final LegacyUserJsonReader? _readLegacyUserJson;
+
+  /// 旧版普通存储删除回调；null 表示无需额外清理。
   final LegacyUserClearer? _clearLegacyUser;
 
+  /// 优先读取新版完整会话；不存在时再尝试一次旧格式迁移。
+  ///
+  /// 返回 null 只表示没有可恢复会话。JSON 格式损坏会抛异常，由 AuthNotifier 上报并
+  /// 清理，避免把数据损坏悄悄伪装成正常退出而失去诊断线索。
   @override
   Future<AuthSession?> read() async {
     final value = await _storage.read(_sessionKey);
@@ -73,11 +98,13 @@ class SecureSessionStore implements SessionStore {
     return session;
   }
 
+  /// 将 token 与 user 编码成同一个 JSON 字符串后写入单一安全 key。
   @override
   Future<void> write(AuthSession session) {
     return _storage.write(_sessionKey, jsonEncode(session.toJson()));
   }
 
+  /// 同时删除当前完整会话与旧版残留凭据。
   @override
   Future<void> clear() async {
     // 退出时同时清理旧 key，确保从早期版本升级的设备不残留有效凭据。

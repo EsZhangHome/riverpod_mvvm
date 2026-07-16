@@ -4,12 +4,15 @@
 // 项目 overrides 仍能被 MyApp 内部读取。否则 README 中推荐的 rootBuilder 组合方式
 // 看起来能编译，运行时却可能落回底座默认依赖。
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:riverpod_mvvm/app/bootstrap/app_bootstrap.dart';
 import 'package:riverpod_mvvm/app/bootstrap/app_warmup.dart';
 import 'package:riverpod_mvvm/app/bootstrap/bootstrap_gate.dart';
+import 'package:riverpod_mvvm/app/navigation/app_route_bundle.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -39,12 +42,21 @@ void main() {
             validateConfiguration: () {},
             initializeStorage: () async {},
           ),
+          routeBundle: AppRouteBundle(
+            authenticatedHome: '/test-home',
+            routes: [
+              GoRoute(
+                path: '/test-home',
+                builder: (context, state) => const SizedBox.shrink(),
+              ),
+            ],
+          ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    // MyApp 第一帧后的 AppWarmup 应读到外层 override，而不是默认监控任务。
+    // 会话恢复完成后的 AppWarmup 应读到外层 override，而不是默认监控任务。
     expect(warmupCount, 1);
   });
 }

@@ -1,6 +1,5 @@
 {
   "@@locale": "en",
-  "starterMessage": "The enterprise starter is ready. Replace this page with your first business feature.",
   "initializationFailed": "Application initialization failed",
   "failedStages": "Failed stages: {stages}",
   "@failedStages": {

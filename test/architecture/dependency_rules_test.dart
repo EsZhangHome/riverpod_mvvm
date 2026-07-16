@@ -56,8 +56,42 @@ void main() {
     violations.addAll(
       _findMvvmLayerViolations(libRoot, projectRoot, packageName),
     );
+    violations.addAll(
+      _findStarterBoundaryViolations(dependencies, libRoot, projectRoot),
+    );
     expect(violations, isEmpty, reason: '发现模块依赖越界：\n${violations.join('\n')}');
   });
+}
+
+/// 保证占位 Starter 保持“单入口可删除”。
+///
+/// Starter 目录内部可以互相引用，默认 main.dart 可以引用它的公共入口；通用路由器、
+/// 守卫、shared/core 和正式 feature 都不能反向依赖 Starter。这样接入真实路由包后，
+/// 替换 main 的 import/函数调用并删除整个目录即可，不会留下隐藏编译引用。
+List<String> _findStarterBoundaryViolations(
+  List<_LocalDependency> dependencies,
+  String libRoot,
+  String projectRoot,
+) {
+  final starterRoot = p.normalize(p.join(libRoot, 'app', 'starter'));
+  final mainPath = p.normalize(p.join(libRoot, 'main.dart'));
+  final violations = <String>[];
+
+  for (final dependency in dependencies) {
+    final targetsStarter = p.isWithin(starterRoot, dependency.target);
+    final sourceInsideStarter = p.isWithin(starterRoot, dependency.source);
+    if (!targetsStarter ||
+        sourceInsideStarter ||
+        dependency.source == mainPath) {
+      continue;
+    }
+    violations.add(
+      '${p.relative(dependency.source, from: projectRoot)} -> '
+      '${p.relative(dependency.target, from: projectRoot)}：'
+      'Starter 只能被 main.dart 通过组件入口引用',
+    );
+  }
+  return violations..sort();
 }
 
 /// 检查 feature 内部的 MVVM 方向，以及 UI/状态层是否绕过 Repository 直接接触

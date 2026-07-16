@@ -22,6 +22,10 @@ import '../errors/app_failure.dart';
 /// ViewModel 只关心 code 和 message，不需要知道 Dio 的复杂错误类型。
 /// 所有网络相关异常最终都会转换为 ApiException 或其子类。
 class ApiException extends AppFailure {
+  /// 创建稳定网络异常。
+  ///
+  /// [code] 用于程序判断和日志检索；[message] 是技术诊断描述；[kind] 决定最终
+  /// 安全文案，默认 protocol，适合 decoder/响应结构错误。不要把 message 直接显示。
   const ApiException({
     required this.code,
     required this.message,
@@ -53,6 +57,7 @@ class ApiException extends AppFailure {
   /// 请求被调用方主动取消，不属于用户可见的请求失败。
   static const int cancelledError = -5;
 
+  /// 是否是调用方主动取消。状态工具用它静默丢弃请求结果，不进入 error UI。
   bool get isCancelled => code == cancelledError;
 
   /// 工厂方法：从 DioException 创建 ApiException。
@@ -64,6 +69,9 @@ class ApiException extends AppFailure {
   /// - connectionError → 网络连接异常
   /// - badCertificate → 证书校验失败
   /// - unknown → 未知错误
+  ///
+  /// [error] 可能包含 RequestOptions、Response 等敏感对象。本工厂只提取稳定类型、
+  /// 状态码和受控 message，不把整个 DioException 保存进面向 UI 的异常。
   factory ApiException.fromDioException(DioException error) {
     switch (error.type) {
       // ---- 超时类错误 ----
@@ -169,6 +177,12 @@ class ApiException extends AppFailure {
 ///
 /// AsyncRequestHandler 只在 canDisplayMessage=true 时使用原文，否则返回通用文案。
 class BusinessException extends ApiException {
+  /// 创建业务失败。
+  ///
+  /// - [code]：后端业务码；
+  /// - [userMessage]：后端原始业务消息或本地已审核领域文案；
+  /// - [canDisplayMessage]：是否允许 FailureMessageResolver 使用原文，默认 true 适合
+  ///   手工创建的本地领域错误。网络 Adapter 创建时会显式传入其信任策略。
   BusinessException({
     required super.code,
     required this.userMessage,

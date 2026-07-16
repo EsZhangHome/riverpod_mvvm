@@ -46,6 +46,16 @@ enum LoadingStyle {
 /// 业务页面只需要提供 child（正常内容），其他状态由 StateView 统一处理。
 /// 这样所有页面的 loading/error/empty 样式保持一致，不需要在每个页面中重复写。
 class StateView extends StatelessWidget {
+  /// 创建统一状态展示组件。
+  ///
+  /// - [state]：ViewModel 当前 ViewState；
+  /// - [child]：idle/success 时展示的真实业务内容，overlay loading 时也保留在底层；
+  /// - [errorMessage]：error 状态交给 ErrorView 的安全文案；
+  /// - [onRetry]：可选重试操作，为 null 时错误页不显示按钮；
+  /// - [loadingStyle]：replace 完全替换内容，overlay 保留内容并阻挡交互；
+  /// - [key]：可选 Widget 身份键。
+  ///
+  /// 本组件只负责“状态 → UI”的映射，不主动更改 Provider，也不会自动发起首次加载。
   const StateView({
     super.key,
     required this.state,
@@ -55,19 +65,19 @@ class StateView extends StatelessWidget {
     this.loadingStyle = LoadingStyle.replace,
   });
 
-  /// 当前页面状态（来自 ViewModel）
+  /// 当前页面状态（来自 ViewModel）。
   final ViewState state;
 
-  /// 正常内容（业务页面编写的 UI）
+  /// 正常内容（业务页面编写的 UI）。
   final Widget child;
 
-  /// 错误提示文案，仅在 error 状态下展示
+  /// 错误提示文案，仅在 error 状态下展示。
   final String errorMessage;
 
-  /// 重试回调，为 null 时 ErrorView 不显示重试按钮
+  /// 重试回调，为 null 时 ErrorView 不显示重试按钮。
   final VoidCallback? onRetry;
 
-  /// loading 展示方式，默认为 replace（替换整个内容区）
+  /// loading 展示方式，默认为 replace（替换整个内容区）。
   final LoadingStyle loadingStyle;
 
   @override

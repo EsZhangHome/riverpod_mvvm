@@ -38,11 +38,15 @@ class EnvConfig {
 
   // ==================== 应用环境 ====================
 
+  /// `ENV_NAME`：环境名称，支持 development/testing/staging/production 及常用别名。
+  /// 默认 development；解析和安全规则见 [environment]、EnvironmentValidator。
   static const String environmentName = String.fromEnvironment(
     'ENV_NAME',
     defaultValue: 'development',
   );
 
+  /// `ENV_APP_NAME`：展示在系统任务、启动页和 MaterialApp 中的应用名称。
+  /// 它不是 pubspec 的 package name，也不会自动修改 Android/iOS 包标识。
   static const String appName = String.fromEnvironment(
     'ENV_APP_NAME',
     defaultValue: 'Riverpod MVVM',
@@ -87,7 +91,9 @@ class EnvConfig {
 
   /// 网络请求重试次数。
   ///
-  /// 只对超时和连接异常生效，不会重试业务错误（4xx/5xx）和请求取消。
+  /// 它只是 RetryInterceptor 的次数上限：默认只有 GET/HEAD 的临时连接或超时
+  /// 异常会重试；写请求还必须通过 RequestContext 明确声明幂等。
+  /// 不会重试 HTTP 4xx/5xx、证书错误和请求取消。
   /// 每次重试之间有退避等待（第 1 次 1 秒，第 2 次 2 秒）。
   static const int retryCount = int.fromEnvironment(
     'ENV_RETRY_COUNT',
@@ -189,9 +195,11 @@ class EnvConfig {
     defaultValue: kDebugMode,
   );
 
+  /// 把 [environmentName] 解析成强类型枚举；名称非法时抛 ConfigurationException。
   static AppEnvironment get environment =>
       AppEnvironment.parse(environmentName);
 
+  /// 汇总所有 dart-define 原始值，生成一次安全校验使用的不可变快照。
   static EnvironmentConfig get current => EnvironmentConfig(
     environment: environment,
     appName: appName,
@@ -202,7 +210,11 @@ class EnvConfig {
     allowBadCertificate: allowCharlesBadCertificate,
   );
 
-  /// 启动时执行安全校验；正式包配置不安全时直接阻断启动。
+  /// 启动时执行安全校验；正式包配置不安全时抛 ConfigurationException。
+  ///
+  /// [releaseMode] 默认使用 Flutter 的 kReleaseMode。参数开放出来仅用于测试不同
+  /// 构建模式；生产代码不应手工传 false 绕过 release 安全校验。
+  /// development 非 release 构建也会检查基本地址和应用名，只是不强制关闭调试能力。
   static void ensureValid({bool releaseMode = kReleaseMode}) {
     final issues = EnvironmentValidator.validate(
       current,

@@ -12,9 +12,13 @@ part 'login_response.g.dart';
 /// 登录响应结果模型。
 @JsonSerializable()
 class LoginResponse {
+  /// 创建已通过后端成功校验的登录结果。
+  ///
+  /// - [token]：后续接口使用的访问令牌，Repository 应确保不是空字符串；
+  /// - [user]：该令牌对应的用户信息，必须与 token 一起交给 AuthNotifier 原子保存。
   const LoginResponse({required this.token, required this.user});
 
-  /// 鉴权令牌
+  /// 鉴权令牌。属于敏感字段，禁止把完整对象写入生产日志。
   final String token;
 
   /// 登录用户信息。协议约定登录成功时必须返回，因此保持非空类型。
@@ -36,5 +40,7 @@ class LoginResponse {
   int get hashCode => Object.hash(token, user);
 
   @override
-  String toString() => 'LoginResponse(token: $token, user: $user)';
+  // token 是可直接调用接口的凭据。调试器、异常信息和日志框架经常隐式调用
+  // toString，因此这里只说明字段存在，绝不输出 token 原文。
+  String toString() => 'LoginResponse(token: <redacted>, user: $user)';
 }

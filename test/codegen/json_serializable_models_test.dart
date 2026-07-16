@@ -5,6 +5,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/features/auth/model/login_request.dart';
+import 'package:riverpod_mvvm/features/auth/model/login_response.dart';
 import 'package:riverpod_mvvm/features/auth/model/user_model.dart';
 
 void main() {
@@ -34,6 +35,18 @@ void main() {
         'account': 'test@example.com',
         'password': '123456',
       });
+    });
+
+    test('login response string never exposes the access token', () {
+      const secretToken = 'secret-access-token';
+      const response = LoginResponse(
+        token: secretToken,
+        user: UserModel(id: '1', name: 'Test User', email: 'test@example.com'),
+      );
+
+      // 日志和调试器经常隐式调用 toString，敏感 token 必须始终被替换。
+      expect(response.toString(), contains('<redacted>'));
+      expect(response.toString(), isNot(contains(secretToken)));
     });
   });
 }

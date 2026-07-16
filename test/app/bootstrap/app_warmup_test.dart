@@ -58,6 +58,36 @@ void main() {
     expect(executions, 1);
   });
 
+  test(
+    'warmup phases only run tasks scheduled for that lifecycle point',
+    () async {
+      final executions = <String>[];
+      final container = ProviderContainer(
+        overrides: [
+          appWarmupTasksProvider.overrideWithValue([
+            AppWarmupTask(
+              name: 'monitoring',
+              phase: AppWarmupPhase.afterFirstFrame,
+              run: () async => executions.add('monitoring'),
+            ),
+            AppWarmupTask(
+              name: 'remote_config',
+              run: () async => executions.add('remote_config'),
+            ),
+          ]),
+        ],
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(appWarmupProvider.notifier);
+
+      await notifier.startPhase(AppWarmupPhase.afterFirstFrame);
+      expect(executions, ['monitoring']);
+
+      await notifier.startPhase(AppWarmupPhase.afterSessionReady);
+      expect(executions, ['monitoring', 'remote_config']);
+    },
+  );
+
   test('task failure is collected without blocking other tasks', () async {
     var secondTaskCompleted = false;
     final container = ProviderContainer(

@@ -17,6 +17,16 @@ import 'package:flutter/material.dart';
 /// - 社区图片列表
 /// - 商品 / 订单缩略图
 class AppNetworkImage extends StatelessWidget {
+  /// 创建统一网络图片组件。
+  ///
+  /// 参数说明：
+  /// - [imageUrl]：完整远端地址；空字符串直接走错误占位，不请求网络；
+  /// - [width]/[height]：逻辑像素尺寸，也用于推算内存解码尺寸；都不传时由父布局约束；
+  /// - [fit]：图片在目标矩形中的缩放/裁剪规则，默认 cover；
+  /// - [borderRadius]：可选圆角，为 null 时不额外创建 ClipRRect；
+  /// - [memCacheWidth]/[memCacheHeight]：直接指定解码后的物理像素上限。通常不用传，
+  ///   组件会根据 width/height × 设备像素比计算；列表缩略图建议给出明确尺寸；
+  /// - [placeholder]/[errorWidget]：可替换默认加载/失败 UI。
   const AppNetworkImage({
     super.key,
     required this.imageUrl,
@@ -49,8 +59,10 @@ class AppNetworkImage extends StatelessWidget {
   /// 不传时不裁剪圆角。
   final BorderRadius? borderRadius;
 
-  /// 内存中的目标解码尺寸。为空时会根据 Widget 尺寸和设备像素比自动计算。
+  /// 内存中的目标解码宽度（物理像素）。为空时根据 Widget 宽度和设备像素比计算。
   final int? memCacheWidth;
+
+  /// 内存中的目标解码高度（物理像素）。为空时根据 Widget 高度和设备像素比计算。
   final int? memCacheHeight;
 
   /// 自定义加载中占位。
@@ -94,6 +106,7 @@ class AppNetworkImage extends StatelessWidget {
     );
   }
 
+  /// 把 [logicalPixels] 转成当前设备的物理像素，并过滤无效/未约束尺寸。
   int? _physicalPixels(BuildContext context, double? logicalPixels) {
     if (logicalPixels == null ||
         !logicalPixels.isFinite ||

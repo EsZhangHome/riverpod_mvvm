@@ -81,7 +81,22 @@ Dio 拦截器的细节留到网络层再看。
 
 ## 3. App 打开后发生了什么
 
-启动流程分为三段，不是把所有 SDK 都塞进 `main()`。
+如果第一次阅读启动代码，建议同时打开
+[启动、登录和首页是怎样连起来的](docs/startup_flow.md)，里面按实际跳转状态逐步展开。
+
+启动流程分为四段。最重要的是分清：Bootstrap 不负责登录，`StarterHomePage` 也不是
+启动页。正常冷启动的真实顺序如下：
+
+```text
+main
+  -> runApplication
+  -> BootstrapGate：配置校验、普通存储
+  -> MyApp / GoRouter
+  -> /session-restoring：读取安全会话
+  -> 无会话：/login
+  -> 有会话：原深链目标或 authenticatedHome
+  -> 目标页面首帧后执行普通 Warmup
+```
 
 ### 第一段：runApp 前，只做同步且必须的工作
 
@@ -115,10 +130,31 @@ Provider 本身是惰性的，只要不要在 Bootstrap 完成前主动读取这
 环境配置不安全属于 `failed`，会阻止进入业务。LocalStorage 不可用属于 `degraded`：App 仍能使用
 内存状态和系统主题，只是不能恢复普通偏好。原始异常会进入日志/监控，页面只显示安全提示。
 
-### 第三段：首帧后预热，重能力按需初始化
+### 第三段：恢复安全会话，再决定登录页或业务页
 
-`MyApp` 完成第一帧后调用 `appWarmupProvider.notifier.start()`。默认预热监控 SDK。远程配置、
-更新检查等非关键任务也可以放进预热任务列表，并行执行；单个任务失败不会盖住首页。
+Bootstrap 放行后，`AuthNotifier` 才从 `SecureSessionStore` 读取 `auth_session_v1`。
+GoRouter 的普通初始地址是 `/session-restoring`，因此不会先画出登录页再闪到首页：
+
+- 没有会话：进入 `/login`。
+- 有完整会话：进入 `authenticatedHome`。
+- 从通知或外部链接进入：先保存内部 `returnTo`，恢复/登录后返回原 path、query 和 fragment。
+- 原目标是公开页面：未登录也可以回到公开页面。
+
+`authenticatedHome` 永远自动受登录保护；其他详情页通过 `protectedPaths` 或
+`protectedPrefixes` 声明。`returnTo` 只接受 App 内部绝对路径，外部 URL 会被拒绝，避免开放重定向。
+
+看到 App 直接进入 Starter，表示安全存储中已经存在上一次登录会话，不是跳过了登录逻辑。默认 Starter
+首页提供“退出登录”，可验证“会话恢复 → 首页 → 退出 → 登录”的完整闭环。
+
+### 第四段：分级预热，重能力按需初始化
+
+`AppWarmupTask.phase` 明确任务时机：
+
+- `afterFirstFrame`：MyApp 第一帧后执行。默认监控 SDK 使用这一阶段，尽早获得异常上报能力。
+- `afterSessionReady`：会话恢复、目标页面画出一帧后执行。远程配置、更新检查和统计 SDK 默认使用这一阶段，
+  避免与安全存储读取争抢启动期资源。
+
+同一阶段只执行一次，阶段内任务并行；单个任务失败只记录问题，不会盖住登录页或首页。
 
 SQLite 不属于预热。`appDatabaseProvider` 在 Repository 第一次执行 CRUD 时才打开数据库并运行迁移。
 某个项目完全不用数据库，就不会为它支付启动耗时。
@@ -129,7 +165,8 @@ SQLite 不属于预热。`appDatabaseProvider` 在 Repository 第一次执行 CR
 | --- | --- |
 | Flutter Engine 绑定、全局错误入口 | `runApplication` |
 | 不完成就无法安全创建业务 Provider | `AppBootstrap` |
-| 首页出现后可后台完成，且全 App 只做一次 | `AppWarmup` |
+| 越早可用越好的非阻塞监控 | `AppWarmupPhase.afterFirstFrame` |
+| 会话完成后才需要的全局任务 | `AppWarmupPhase.afterSessionReady` |
 | 只有某项功能使用的数据库、地图、支付 SDK | 对应 Provider 第一次使用时按需初始化 |
 
 不要为了看起来统一，就把所有初始化都放进 Bootstrap。启动编排的目标是时序清楚，不是任务越多越好。
@@ -139,7 +176,7 @@ SQLite 不属于预热。`appDatabaseProvider` 在 Repository 第一次执行 CR
 ```dart
 Future<void> main() {
   return runApplication(
-    createProjectRoutes(),
+    createProjectRouteBundle(),
     crashReportingBackend: ProjectCrashBackend(),
     performanceReporter: ProjectPerformanceReporter(),
     rootBuilder: (child) => ProviderScope(
@@ -170,7 +207,7 @@ lib/
   app/
     bootstrap/              启动关键路径、首帧后预热、启动失败页
     navigation/             路由器、登录守卫、业务路由组合契约
-    starter/                登录后的最小落点，等待真实首页替换
+    starter/                可整体删除的登录后占位路由组件
   core/
     app/                    App 版本等平台信息
     cache/                  可替换缓存策略
@@ -370,9 +407,10 @@ lib/features/dashboard/
 6. 创建项目自己的 `AppRouteBundle`，不要把业务页面直接写回通用 `AppRouter`。
 
 ```dart
-AppRouteBundle createProjectRoutes() {
+AppRouteBundle createProjectRouteBundle() {
   return AppRouteBundle(
     authenticatedHome: '/dashboard',
+    // 首页会被自动保护；这里保护 dashboard 下的其他详情页。
     protectedPrefixes: const ['/dashboard'],
     routes: [
       GoRoute(
@@ -384,7 +422,36 @@ AppRouteBundle createProjectRoutes() {
 }
 ```
 
-最后在 `main.dart` 把默认的 `AppRouteBundle.starter()` 替换为 `createProjectRoutes()`。
+`AppRouteBundle` 这些参数分别解决不同问题：
+
+| 参数 | 含义 | 工作台示例 |
+| --- | --- | --- |
+| `authenticatedHome` | 登录成功后最终进入的地址；必须有对应 `GoRoute.path`，并自动受登录保护 | `/dashboard` |
+| `routes` | 项目真正注册到 GoRouter 的页面表 | Dashboard、订单、设置等路由 |
+| `protectedPaths` | 必须登录的精确地址，只匹配完全相同的 path | `/settings` |
+| `protectedPrefixes` | 必须登录的一组路由前缀，适合整个业务模块 | `/dashboard`、`/orders` |
+| `loginPath` | 未登录时统一跳转的登录地址；通常沿用 `/login` | 不传 |
+| `loginBuilder` | 项目需要替换底座登录页时提供的 Widget builder | SSO 登录页 |
+
+这里传入的是 URI 的 `path`，不是完整 URL，也不包含 query。比如
+`/orders/detail?id=100` 判断保护范围时使用 `/orders/detail`。`createProjectRouteBundle()` 是项目自己写的普通
+函数，不是 Riverpod 或底座自动生成的 API；建议放在 `lib/project_routes.dart` 或项目 App 组合目录。
+构造函数会立即拒绝外部 URL、带 query/fragment 的路径，并把路由和保护列表复制成不可变列表，避免启动后
+被其他代码原地修改。
+
+最后让 `main.dart` 改为导入项目路由并调用：
+
+```dart
+import 'app/bootstrap/run_application.dart';
+import 'project_routes.dart';
+
+Future<void> main() {
+  return runApplication(createProjectRouteBundle());
+}
+```
+
+确认编译通过后删除 `lib/app/starter/` 和它自己的 `test/app/starter/`。其他 MyApp、认证、路由和架构测试
+使用独立测试路由，不依赖 Starter；架构测试也会阻止以后把 Starter 依赖重新写回通用底座。
 
 架构测试会检查：
 
@@ -417,6 +484,16 @@ dart run tool/bootstrap.dart \
 - SQLite 文件名和 `config/local.json`。
 - Demo 对根 package 的依赖名；不会修改 Demo 自己的 applicationId。
 
+命令参数说明：
+
+| 参数 | 是否必填 | 作用 |
+| --- | --- | --- |
+| `--name` | 是 | Dart 包名，也作为移动端 App ID 最后一段，如 `acme_console` |
+| `--display-name` | 是 | 用户在桌面看到的名称，可以有空格或中文 |
+| `--organization` | 是 | 反向域名前缀，如 `com.acme`，最终 App ID 为 `com.acme.acme_console` |
+| `--mode` | 否 | `development` 默认开 Mock；`production` 生成必须替换的安全占位配置 |
+| `--dry-run` | 否 | 只列出会修改的文件，不真正写入 |
+
 脚本按“一次性初始化”设计，不要在同一项目反复执行。详细发布配置见
 [企业项目启动指南](docs/enterprise_starter.md)。
 
@@ -442,21 +519,51 @@ flutter test
 会自动跳过。正式 App 即使没有删除 Demo，根目录执行 `flutter build` 也不会编译它；删除只是为了让仓库
 更干净。
 
-`StarterPage` 不是 Demo，它是底座登录后的最小落点。接入真实首页后，路由已经不会再进入它；是否删除
-由项目决定，不影响 Demo 的独立性。
+`lib/app/starter` 也不是 Demo package，它是根底座第一次运行时使用的可拔插占位路由组件。接入真实首页后：
+
+1. 将 `main.dart` 的 `app/starter/starter.dart` import 替换为项目路由文件。
+2. 将 `createStarterRouteBundle()` 替换为 `createProjectRouteBundle()`。
+3. 删除 `lib/app/starter/` 和对应的 `test/app/starter/`。
+
+不需要修改 AppRouter、路由守卫、RoutePaths、认证模块或 CI。保留 Starter 时，正式构建会包含这个已注册的
+占位路由；因此真实项目接入首页后推荐删除，而不是长期随正式 App 发布。Starter 的中英文占位文案也保存在
+自己的 `starter_strings.dart`，没有写进全局 ARB，删除目录后生成的 AppLocalizations 不会残留占位字段。
 
 ## 12. 注释怎么读，哪些文件不要手改
 
-底座手写代码的注释主要回答这些问题：
+底座手写代码的注释按“先职责、再参数、再流程、最后边界”组织，主要回答这些问题：
 
 - 这个类属于哪一层，拥有哪份状态。
+- 构造函数和方法的每个参数是谁传入的、null/默认值表示什么。
+- 方法成功返回什么，取消、重复调用、Provider 销毁和异常时又返回什么。
 - 为什么使用这种 Provider，生命周期到哪里结束。
 - 一次请求或启动任务按什么顺序执行。
 - 失败后是阻断、降级、重试还是忽略。
 - 真实项目应该在哪个接口扩展，而不是修改底层实现。
 
-简单的 `Padding`、`Text`、getter 不会逐行翻译语法。注释如果只是把代码再念一遍，会让真正重要的
-并发和架构说明更难找到。
+阅读一个不认识的参数时，按下面顺序找：
+
+1. 先看当前构造函数/方法上方的“参数说明”，确认它的业务含义和默认值。
+2. 再看字段注释，确认它保存多久、是否敏感、是否允许为 null。
+3. 参数属于回调或泛型时，看 typedef/接口注释，确认回调什么时候执行、返回值怎样解释。
+4. 最后沿 Provider 查到创建位置，理解是谁注入了真实实现、测试怎样 override。
+
+几个最容易误解的参数已经在源码中单独说明：
+
+| 参数 | 所在文件 | 最重要的边界 |
+| --- | --- | --- |
+| `rootBuilder` | `run_application.dart` | 在启动门外包 ProviderScope/SDK Scope，不能提前读取依赖 LocalStorage 的业务 Provider |
+| `stageTimeout` | `app_bootstrap.dart` | 单个关键启动阶段的上限，不是整个 App 的统一网络超时 |
+| `authenticatedHome` | `app_route_bundle.dart` | 必须与 routes 中真实注册的首页 path 一致 |
+| `allowRetry` | `request_context.dart` | 只声明临时网络错误可重试，不等于允许 401 后重放 |
+| `replayPolicy` | `request_context.dart` | 控制认证刷新后的原请求重放，支付、建单等敏感操作应设 never |
+| `forceNeverReplay` | `api_client.dart` | 内部保护上传/下载流，调用方不能用 context 绕过 |
+| `fromJson` | `api_service.dart` | 解析响应外壳中的 data，不是解析整个 Dio Response |
+| `readState` | `paginated_handler.dart` | 异步结束时读取最新 State，防止覆盖实时推送或乐观更新 |
+| `clearToken` | `login_view_model.dart` | 显式清空可空字段；`token: null` 本身表示沿用旧值 |
+
+简单 Widget 的布局语法和显而易见的常量不会逐行翻译；这类逐字注释会淹没真正需要理解的参数、生命周期、
+并发和安全边界。类、公开方法、重要私有方法、回调、状态字段和可替换接口都应能从注释中读到“为什么这样设计”。
 
 以下文件是生成代码，不要手工补注释或修改：
 
@@ -474,8 +581,9 @@ flutter test
 
 ### 登录后没有进入首页
 
-检查项目路由包的 `authenticatedHome` 是否存在于 `routes`，以及受保护路径是否正确。登录页故意不写
-`context.go`，导航由 auth 状态和路由守卫统一决定。
+检查项目路由包的 `authenticatedHome` 是否真实存在于 `routes`。首页会自动受保护；其他详情页检查
+`protectedPaths/protectedPrefixes`。登录页故意不写 `context.go`，导航由 auth 状态、当前安全 returnTo 和
+路由守卫统一决定。
 
 ### 页面退出后请求还在跑
 

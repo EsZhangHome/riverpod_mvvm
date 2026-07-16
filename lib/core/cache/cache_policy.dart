@@ -46,6 +46,9 @@ abstract class CachePolicy<T> {
   /// 通常在一次成功的网络请求后调用，把新数据交给当前缓存实现。内存实现只
   /// 保留进程内数据；文件或数据库实现才属于持久化缓存。
   /// 若实现支持过期策略，应记录写入时间供 readCache 判断。
+  /// [data] 是已完成业务解析的强类型数据，不是原始 HTTP Response。持久化实现负责
+  /// 自己的序列化；如果序列化或写盘失败，应抛出异常，让 Repository 决定是否允许
+  /// “网络成功但缓存失败”继续返回数据。
   Future<void> writeCache(T data);
 
   /// 清理缓存数据。
@@ -76,13 +79,21 @@ abstract class CachePolicy<T> {
 /// 是否跨页面共享取决于这个实例由哪个 Riverpod Provider 持有，而不是由
 /// MemoryCachePolicy 自己变成静态全局单例。
 class MemoryCachePolicy<T> implements CachePolicy<T> {
-  /// [duration] 缓存有效期，超过此时间后 readCache 返回 null。
+  /// 创建一个进程内单值缓存。
+  ///
+  /// [duration] 从每次 writeCache 成功的时刻开始计算。建议传正数；传入
+  /// Duration.zero 或负数不会抛错，但数据几乎会立即被判定过期。
+  ///
+  /// 一个实例只保存一份 T。如果需要按用户 id、查询条件或分页参数分别缓存，应由
+  /// Provider family 创建多个实例，或实现支持 key 的缓存策略，不能把不同查询结果
+  /// 轮流写入同一个实例。
   MemoryCachePolicy({required this.duration});
 
   /// 缓存有效期，从写入时开始计时。
   final Duration duration;
 
   /// 缓存数据本体，未写入时为 null。
+  /// 因此不建议把 T 声明成可空类型；写入 null 会和“没有缓存”无法区分。
   T? _data;
 
   /// 缓存写入时间，用于判断是否过期。

@@ -14,6 +14,10 @@ import 'dart:io';
 ///
 /// 这是一次性脚本，不会在 App 运行时进入安装包。它使用 `dart:io` 直接修改文件，
 /// 所以先用 `--dry-run` 查看影响范围，再在干净 Git 工作区正式执行最容易回退。
+///
+/// [arguments] 是命令行中脚本名之后的参数，支持项见文件末尾 [_usage]。main 返回
+/// void 是因为 CLI 通过 [exitCode] 表达成功/失败：0 成功、64 参数或执行位置错误、
+/// 65 项目元数据无法读取。部分参数校验使用 exit(64) 立即停止，确保写文件前失败。
 void main(List<String> arguments) {
   // 第一步：只负责解析和验证参数。参数无效时立即退出，尚未写任何文件。
   final options = _Options.parse(arguments);
@@ -163,6 +167,13 @@ void main(List<String> arguments) {
   stdout.writeln('下一步：检查 config/local.json 的 API 地址，然后执行 flutter pub get。');
 }
 
+/// 根据文件类型替换应用显示名。
+///
+/// - [content]：当前文件完整文本；
+/// - [path]：文件路径，只用于判断 AndroidManifest/Info.plist/EnvConfig 类型；
+/// - [displayName]：用户通过 `--display-name` 提供的新名称。
+///
+/// 找不到预期节点时返回原文，不会尝试模糊改写未知格式。
 String _replaceDisplayName(String content, String path, String displayName) {
   // 同一个“应用显示名”在 Android、iOS 和 Dart 默认配置中的写法不同，按文件
   // 类型分别处理。找不到目标节点时 replaceFirst 会保持原文，不会破坏文件。
@@ -194,6 +205,14 @@ String _replaceDisplayName(String content, String path, String displayName) {
   return content;
 }
 
+/// 移动 Android Java MainActivity 到新的 applicationId 包目录。
+///
+/// - [root]：Flutter 仓库根目录；
+/// - [oldApplicationId]/[newApplicationId]：移动前后的完整 Android 应用标识；
+/// - [dryRun]：true 时只登记计划动作，不移动文件；
+/// - [changed]：最终报告使用的可变文件列表，本方法会追加一条 move 记录。
+///
+/// 找不到 Java MainActivity 时安全跳过，因为项目可能使用 Kotlin 或自定义入口。
 void _moveMainActivity({
   required Directory root,
   required String oldApplicationId,
@@ -219,6 +238,9 @@ void _moveMainActivity({
   _deleteEmptyParents(Directory(oldDir), Directory(javaRoot));
 }
 
+/// 从 [directory] 向上删除移动 MainActivity 后留下的空包目录。
+///
+/// [stopAt] 是绝不能删除的 java 源码根目录；遇到非空目录也会立即停止。
 void _deleteEmptyParents(Directory directory, Directory stopAt) {
   // MainActivity 移走后，从最深 package 目录向上删除空目录，但绝不会删过
   // android/app/src/main/java 根目录。
@@ -233,6 +255,7 @@ void _deleteEmptyParents(Directory directory, Directory stopAt) {
   }
 }
 
+/// 根据初始化 [options] 生成不会提交 Git 的 config/local.json 内容。
 Map<String, Object> _localConfig(_Options options) {
   // production 故意写入 `.invalid` 地址：配置校验会阻止误发布，使用者必须明确
   // 换成真实 HTTPS 地址。development 默认开 Mock，克隆后无需后端也能启动。
@@ -293,6 +316,14 @@ String _relative(String root, String path) =>
 ///
 /// 字段以下划线开头，是因为它只服务于本脚本，不属于 App 的公共 API。
 class _Options {
+  /// 保存已经通过校验的命令行选项。
+  ///
+  /// - [name]：Dart package 名，只能小写字母/数字/下划线；
+  /// - [displayName]：桌面图标下和系统设置中看到的应用名；
+  /// - [organization]：反向域名前缀，如 com.acme；最终 App ID 为它加 name；
+  /// - [mode]：development 或 production，决定 local.json 的安全默认值；
+  /// - [dryRun]：只报告文件，不实际写入；
+  /// - [showHelp]：只打印帮助并结束。
   const _Options({
     required this.name,
     required this.displayName,
@@ -302,6 +333,10 @@ class _Options {
     required this.showHelp,
   });
 
+  /// 解析并验证原始 [arguments]。
+  ///
+  /// 缺少必填项或格式错误会打印原因并以 exit code 64 终止；返回的对象可以直接用于
+  /// 文件替换，无需让后续每个步骤重复验证同一参数。
   factory _Options.parse(List<String> arguments) {
     if (arguments.contains('--help') || arguments.contains('-h')) {
       return const _Options(
@@ -361,11 +396,22 @@ class _Options {
     );
   }
 
+  /// 新 Dart package 名，同时用于 App ID 最后一段。
   final String name;
+
+  /// 用户在设备桌面看到的应用名称，可包含空格和中文。
   final String displayName;
+
+  /// 组织反向域名前缀，不包含 package name。
   final String organization;
+
+  /// 初始化环境模式，仅允许 development/production。
   final String mode;
+
+  /// 是否只预览而不写入文件。
   final bool dryRun;
+
+  /// 是否只显示 CLI 帮助。
   final bool showHelp;
 }
 

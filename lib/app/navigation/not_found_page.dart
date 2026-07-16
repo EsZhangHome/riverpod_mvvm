@@ -21,8 +21,14 @@ import '../../shared/navigation/route_paths.dart';
 /// 不直接返回空白页，而是提供友好的提示和返回首页的入口，
 /// 减少用户的迷路感。
 class NotFoundPage extends StatelessWidget {
+  /// 创建 404 页面。
+  ///
+  /// [fallbackPath] 是用户点击“返回首页”时先进入的安全地址，默认 `/login`。
+  /// 选择登录地址而不是写死业务首页，可以同时覆盖两种情况：未登录用户停留在
+  /// 登录页；已登录用户会由 AuthRouteGuard 自动转到当前项目的首页。
   const NotFoundPage({super.key, this.fallbackPath = RoutePaths.login});
 
+  /// 404 页按钮跳转的兜底地址，必须是 AppRouter 已注册的可匹配路径。
   final String fallbackPath;
 
   @override

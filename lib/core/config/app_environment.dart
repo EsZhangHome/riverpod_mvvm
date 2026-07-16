@@ -14,6 +14,11 @@ enum AppEnvironment {
   staging,
   production;
 
+  /// 把 dart-define 或配置文件中的字符串转换为稳定枚举。
+  ///
+  /// [value] 会先去除首尾空格并转成小写；支持 dev/test/uat/prod 等常用别名。
+  /// 无法识别时抛出 ConfigurationException，而不是静默回退 development，避免
+  /// 因拼写错误使用了错误服务器。
   static AppEnvironment parse(String value) {
     // 兼容团队常用缩写，但最终统一成枚举，避免业务到处比较字符串。
     return switch (value.trim().toLowerCase()) {
@@ -31,6 +36,11 @@ enum AppEnvironment {
 /// 为什么不用 Map：字段能被 IDE 自动补全，改名有编译器检查，也不会把 bool
 /// 写成字符串。为什么不在这里保存 secret：dart-define 会进入编译产物，不安全。
 class EnvironmentConfig {
+  /// 创建一份用于校验的完整环境快照。
+  ///
+  /// 该构造函数主要由 EnvConfig.current 和单元测试使用。它不主动校验参数；安全
+  /// 规则统一放在 EnvironmentValidator.validate，避免“对象无法构造”和“问题无法
+  /// 一次收集完整”之间冲突。
   const EnvironmentConfig({
     required this.environment,
     required this.appName,
@@ -41,22 +51,24 @@ class EnvironmentConfig {
     required this.allowBadCertificate,
   });
 
-  /// 当前开发、测试、预发或生产环境。
+  /// 当前开发、测试、预发或生产环境，决定是否主动启用生产级严格校验。
   final AppEnvironment environment;
 
   /// 展示给用户的应用名称，不是 Dart package name。
   final String appName;
 
-  /// 所有 API 请求共用的绝对基础地址。
+  /// 所有 API 请求共用的绝对基础地址，例如 `https://api.example.cn`。
+  /// 必须包含 scheme 和 host；末尾是否带 `/` 需与接口 path 约定保持一致。
   final String apiBaseUrl;
 
-  /// 是否使用本地 Mock 数据；正式包必须关闭。
+  /// 是否允许 Repository 选择本地 Mock 数据；正式或 release 包必须关闭。
   final bool enableMock;
 
-  /// 是否输出调试日志；正式包必须关闭，避免泄露诊断信息。
+  /// 是否允许默认 DebugLogSink 输出调试日志；正式包必须关闭。
+  /// 自定义远程 LogSink 仍应自行实现脱敏、等级和采样策略。
   final bool enableDebugLogs;
 
-  /// 是否把请求发送到本地 Charles 代理。
+  /// 是否把 ApiClient 请求发送到本地 Charles 代理。
   final bool enableCharlesProxy;
 
   /// 是否允许代理的非可信证书。仅限本地联调，正式包绝不能开启。
@@ -70,6 +82,10 @@ class EnvironmentConfig {
 
 /// 配置错误属于启动阻断问题，不能带着不安全参数继续运行正式包。
 class ConfigurationException implements Exception {
+  /// 创建包含全部配置问题的异常。
+  ///
+  /// [issues] 应是面向开发者的稳定问题列表，不应包含 secret。EnvConfig 会在列表
+  /// 非空时抛出本异常，Bootstrap 将其视为 critical 并阻断启动。
   const ConfigurationException(this.issues);
 
   /// 一次保存全部问题，让开发者改完一批后再重启，而不是逐个试错。
@@ -86,6 +102,14 @@ class ConfigurationException implements Exception {
 abstract final class EnvironmentValidator {
   /// 返回全部问题而不是遇到第一个就抛出，开发者一次即可修完所有错误。
   /// 真正是否抛异常由 EnvConfig.ensureValid/AppBootstrap 决定。
+  ///
+  /// - [config]：需要校验的不可变配置快照；
+  /// - [releaseMode]：当前是否为 Flutter release 构建。即使 config.environment
+  ///   写成 development，只要该值为 true 仍会启用 HTTPS、关闭 Mock 等严格规则，
+  ///   防止通过错误环境名绕过发布保护。
+  ///
+  /// 返回不可变问题列表；空列表表示通过。本方法不抛已知校验问题，方便测试和
+  /// 启动页一次展示全部原因。
   static List<String> validate(
     EnvironmentConfig config, {
     required bool releaseMode,

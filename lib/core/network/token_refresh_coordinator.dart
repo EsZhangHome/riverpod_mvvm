@@ -4,6 +4,8 @@
 // 都刷新一次，会造成 refresh storm，甚至让后端把前一次新 token 立即作废。
 // Coordinator 用“正在执行的 Future”作为单航班锁，所有请求等待同一结果。
 
+/// 刷新访问令牌的最小回调类型。
+/// 返回非空 token 表示成功；返回 null/空串表示会话不可恢复；抛错表示刷新过程失败。
 typedef RefreshAccessToken = Future<String?> Function();
 
 /// 合并同一时刻发生的多个 Token 刷新请求。
@@ -14,7 +16,13 @@ class TokenRefreshCoordinator {
   /// 非 null 表示刷新正在进行。这里缓存 Future，不缓存 token 本身。
   Future<String?>? _inFlight;
 
-  /// 执行或加入当前刷新任务。并发调用者会拿到完全相同的 Future 结果。
+  /// 执行或加入当前刷新任务。
+  ///
+  /// [refresh] 只会被第一个并发调用者执行；后续调用直接等待 [_inFlight]，即使它们
+  /// 传入了不同回调也不会启动第二次刷新。因此一个 Coordinator 只能服务同一个
+  /// 登录会话/ApiClient，不应作为跨用户全局静态对象共享。
+  ///
+  /// 成功、null 和异常都会原样广播给所有等待者，完成后锁自动清除。
   Future<String?> run(RefreshAccessToken refresh) {
     final active = _inFlight;
     // 后来的 401 直接等待第一次刷新，不再调用 refresh。

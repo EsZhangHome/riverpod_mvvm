@@ -20,6 +20,10 @@ import '../localization/app_strings.dart';
 /// 展示空数据图标和提示文案。
 /// 通过 StateView 统一调用，业务页面不需要直接使用这个组件。
 class EmptyView extends StatelessWidget {
+  /// 创建空状态视图。
+  ///
+  /// [message] 是请求成功但没有数据时的提示，默认“暂无数据”；它不是错误文案，
+  /// 不应该在接口失败时使用。可选 [key] 只用于 Flutter Widget 身份识别。
   const EmptyView({super.key, this.message = AppStrings.noData});
 
   /// 提示文案，默认 "暂无数据"

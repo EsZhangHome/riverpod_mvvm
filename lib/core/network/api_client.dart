@@ -52,6 +52,20 @@ import 'token_refresh_coordinator.dart';
 /// }
 /// ```
 class ApiClient implements ApiService {
+  /// 创建网络客户端，并在创建时安装底座统一的拦截器链。
+  ///
+  /// 参数说明：
+  /// - [dio]：可选的 Dio 实例。正式运行通常不传，由底座根据 [EnvConfig]
+  ///   创建并配置 baseUrl、连接/收发超时和 JSON Header；单元测试或接入已有
+  ///   网络配置时可以传入。传入的 Dio 仍会被本类安装代理配置和拦截器，调用
+  ///   [close] 时也会被关闭，因此不要把同一个 Dio 同时交给其他长期对象持有；
+  /// - [responseAdapter]：把后端响应体转换成 `ApiResponse<T>` 的协议适配器。
+  ///   不传时使用 [EnvelopeResponseAdapter]，即默认后端协议是
+  ///   `{code, message, data}`。真实项目协议不同时，应在 Provider 组合层替换，
+  ///   不要在每个 Repository 内重复拆响应字段。
+  ///
+  /// 构造函数只负责创建基础设施，不会立即发起网络请求。调用方应让 Riverpod
+  /// 托管本实例，并在 Provider 销毁时调用 [close] 释放连接池。
   ApiClient({Dio? dio, ResponseAdapter? responseAdapter})
     : _responseAdapter = responseAdapter ?? const EnvelopeResponseAdapter() {
     _dio =
@@ -89,6 +103,12 @@ class ApiClient implements ApiService {
   /// 普通 Repository 应通过 ApiService 请求，不应读取下面的 [dio] getter；getter
   /// 只为基础设施扩展和底层测试保留，因此这里不是“完全隐藏 Dio”的强隔离。
   late final Dio _dio;
+
+  /// 当前项目使用的响应协议适配器。
+  ///
+  /// 它在客户端创建后保持不变，确保同一个 ApiClient 的所有 Repository 遵循
+  /// 同一套成功码、消息字段和 data 解码规则。若项目存在多套完全不同的后端协议，
+  /// 应按服务域创建不同 ApiClient，而不是在单个请求中临时切换协议。
   final ResponseAdapter _responseAdapter;
 
   /// token 提供者回调，由认证网络组合 Provider 注入。
@@ -101,6 +121,11 @@ class ApiClient implements ApiService {
   ///
   /// 当刷新不可用、刷新失败或重放后仍为 401，确认会话失效时调用该回调。
   Future<void> Function()? _onUnauthorized;
+
+  /// 刷新访问令牌的可选回调。
+  ///
+  /// 返回新的非空 token 表示刷新成功；返回 null/空字符串或抛出异常表示刷新失败。
+  /// 多个并发 401 会由 [TokenRefreshCoordinator] 合并为一次刷新操作。
   RefreshAccessToken? _refreshAccessToken;
 
   /// 会话失效守卫，防止一批 401 重复触发退出登录。
@@ -108,8 +133,11 @@ class ApiClient implements ApiService {
 
   // ==================== 公开属性 ====================
 
-  /// 底层扩展入口，例如项目组合层添加自定义拦截器。
-  /// 业务 Repository 不应使用它绕过 ApiService 的响应适配与异常转换。
+  /// 底层 Dio 扩展入口，例如项目组合层添加签名、缓存或监控拦截器。
+  ///
+  /// 业务 Repository 不应使用它直接调用 `dio.get/post`，否则会绕过本类统一的
+  /// 响应协议适配和异常转换。读取此 getter 不会创建新对象，返回的就是本类持有的
+  /// Dio；对其 options/interceptors 的修改会影响之后的全部请求。
   Dio get dio => _dio;
 
   // ==================== Charles 抓包配置 ====================
@@ -156,6 +184,10 @@ class ApiClient implements ApiService {
   ///
   /// 由认证网络组合 Provider 调用。拦截器通过闭包读取当前回调，因此这里只替换
   /// 字段，不会在请求执行期间清空或重建 Dio 拦截器链。
+  ///
+  /// [tokenProvider] 会在“每一次请求真正发送前”被调用，而不是在这里立即读取。
+  /// 回调应只读取内存中的认证状态，不要在回调内访问数据库或发起异步请求；未登录
+  /// 时返回 null/空字符串，请求就不会携带 Authorization Header。
   void setTokenProvider(String? Function() tokenProvider) {
     _tokenProvider = tokenProvider;
   }
@@ -164,11 +196,18 @@ class ApiClient implements ApiService {
   ///
   /// 由认证网络组合 Provider 调用。UnauthorizedGuard 和拦截器在客户端构造时已
   /// 创建，这里只更新它们稍后读取的业务回调。
+  ///
+  /// [callback] 通常清理 SessionStore，让路由守卫自动跳回登录页。它只在刷新不可用
+  /// 或最终失败后调用，不应在这里直接操作某个页面的 BuildContext。
   void setUnauthorizedCallback(Future<void> Function() callback) {
     _onUnauthorized = callback;
   }
 
-  /// 可选刷新回调。未配置或返回 null 时保持原有 401 退出行为。
+  /// 设置可选的 token 刷新回调。
+  ///
+  /// [callback] 接收不到参数，因为刷新所需的 refresh token 应由认证模块自己持有；
+  /// 成功时返回新的 access token，失败时返回 null/空字符串或抛异常。传 null 表示
+  /// 当前项目不支持静默刷新，遇到 401 后直接走会话失效流程。
   void setTokenRefreshCallback(RefreshAccessToken? callback) {
     _refreshAccessToken = callback;
   }
@@ -270,6 +309,10 @@ class ApiClient implements ApiService {
     );
   }
 
+  /// PATCH 请求：通常只更新资源的部分字段。
+  ///
+  /// 参数含义与 [post] 相同。PATCH 默认不允许网络自动重试；只有后端已实现幂等
+  /// 语义时，调用方才能通过 [RequestContext] 显式开启。
   @override
   Future<ApiResponse<T>> patch<T>(
     String path, {
@@ -396,8 +439,15 @@ class ApiClient implements ApiService {
   /// 4. 把 Dio 网络异常转换为稳定的 `ApiException`，避免上层依赖 Dio 错误枚举。
   /// 5. 把模型解码或协议不匹配转换为协议错误，交给上层统一生成安全提示文案。
   ///
-  /// [request]：HTTP 请求闭包，由各方法传入
-  /// [fromJson]：将原始 JSON 转为业务 Model 的回调
+  /// 参数说明：
+  /// - [request]：真正执行 Dio 请求的异步闭包。使用闭包可让所有 HTTP 方法共用
+  ///   同一套成功判断、异常边界和响应解析流程；
+  /// - [fromJson]：把响应协议中 data 字段转换成 T。返回类型复杂时必须提供；
+  ///   如果转换函数本身抛错，会被归类为响应协议/解码错误，而不是网络断开。
+  ///
+  /// 返回值是已经过协议适配和业务成功码校验的 `ApiResponse<T>`。业务码失败会抛
+  /// [BusinessException]，Dio 错误会抛稳定的 [ApiException]；调用方无需识别
+  /// `DioExceptionType`。
   Future<ApiResponse<T>> _request<T>(
     Future<Response<dynamic>> Function() request,
     T Function(dynamic json)? fromJson,
@@ -429,6 +479,14 @@ class ApiClient implements ApiService {
     }
   }
 
+  /// 把与业务无关的 [RequestContext] 转成 Dio 的单次请求配置。
+  ///
+  /// [context] 为 null 且 [forceNeverReplay] 为 false 时返回 null，表示完全沿用 Dio
+  /// 默认 Options。context.headers 会进入真实 HTTP Header；requestId、allowRetry
+  /// 等客户端控制信息会进入 extra，供拦截器读取，不会自动发送给服务器。
+  ///
+  /// [forceNeverReplay] 用于上传、下载等流式请求。即使调用方误传了允许重放的
+  /// context，也会强制写入 `replayDisabled`，避免文件流被 401/弱网重试重复消费。
   Options? _options(RequestContext? context, {bool forceNeverReplay = false}) {
     if (context == null && !forceNeverReplay) return null;
     return Options(
@@ -448,6 +506,11 @@ class ApiClient implements ApiService {
     );
   }
 
+  /// 释放 Dio 持有的连接池并取消尚未结束的请求。
+  ///
+  /// `force: true` 表示不等待存量连接自然结束，适合 ProviderContainer/应用会话真正
+  /// 销毁时调用。关闭后本实例不可再次请求。若构造时注入了外部 Dio，它也会被关闭，
+  /// 这就是构造函数要求“不要共享外部 Dio 所有权”的原因。
   void close() => _dio.close(force: true);
 
   // ==================== 拦截器管理 ====================

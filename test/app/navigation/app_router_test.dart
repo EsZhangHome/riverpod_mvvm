@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:riverpod_mvvm/app/navigation/app_router.dart';
 import 'package:riverpod_mvvm/app/navigation/app_route_bundle.dart';
 import 'package:riverpod_mvvm/app/navigation/route_guard.dart';
@@ -13,10 +14,25 @@ void main() {
   test('app router keeps the same GoRouter instance', () {
     // Arrange：refreshListenable 模拟 App 层的 Riverpod → GoRouter 桥接对象。
     final refreshListenable = ChangeNotifier();
+    const businessHome = '/business/home';
+    final routeBundle = AppRouteBundle(
+      authenticatedHome: businessHome,
+      routes: [
+        GoRoute(
+          path: businessHome,
+          builder: (context, state) => const SizedBox.shrink(),
+        ),
+      ],
+    );
     final appRouter = AppRouter(
       refreshListenable: refreshListenable,
-      guards: [AuthRouteGuard(() => const AuthState.unauthenticated())],
-      routeBundle: const AppRouteBundle.starter(),
+      guards: [
+        AuthRouteGuard(
+          () => const AuthState.unauthenticated(),
+          authenticatedHome: businessHome,
+        ),
+      ],
+      routeBundle: routeBundle,
     );
     addTearDown(appRouter.config.dispose);
     addTearDown(refreshListenable.dispose);

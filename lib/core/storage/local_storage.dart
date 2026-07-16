@@ -76,6 +76,9 @@ class LocalStorage {
 
   /// 读取字符串值。
   ///
+  /// [key] 是稳定存储键，应由拥有该偏好的模块集中声明常量；不要使用用户输入作为
+  /// key，也不要与其他模块复用含义不同的同名 key。
+  ///
   /// 返回 null 的情况：
   /// - 尚未初始化
   /// - key 不存在
@@ -92,6 +95,9 @@ class LocalStorage {
 
   /// 写入字符串值。
   ///
+  /// [key] 是存储键；[value] 是普通非敏感字符串。token、密码、身份证号等敏感
+  /// 数据必须使用 SessionStore/SecureStorage，而不是本方法。
+  ///
   /// 返回 true 表示插件写入成功；未初始化时返回 false。
   /// 插件执行期间的异常会通过 Future 继续抛出，由调用方按业务重要性处理。
   static Future<bool> setString(String key, String value) {
@@ -104,7 +110,7 @@ class LocalStorage {
 
   /// 读取布尔值。
   ///
-  /// [defaultValue]：key 不存在或未初始化时返回的默认值。
+  /// [key] 是稳定存储键；[defaultValue] 是 key 不存在或未初始化时的业务默认值。
   /// 支持默认值可以避免调用方每次都判空。
   /// 如果同名 key 实际保存的不是 bool，插件读取时可能抛出类型异常。
   static bool getBool(String key, {bool defaultValue = false}) {
@@ -116,6 +122,7 @@ class LocalStorage {
 
   /// 写入布尔值。
   ///
+  /// [key] 和 [value] 分别是稳定键与布尔值；本方法不会自动加模块前缀。
   /// 返回 true 表示插件写入成功，未初始化时返回 false；插件异常继续抛出。
   static Future<bool> setBool(String key, bool value) {
     if (!_initialized) {
@@ -126,6 +133,7 @@ class LocalStorage {
 
   /// 删除指定 key 的值。
   ///
+  /// [key] 只删除这一项，不影响其他模块偏好。适合清理废弃字段或用户级普通配置。
   /// 返回 true 表示插件删除成功，未初始化时返回 false；插件异常继续抛出。
   static Future<bool> remove(String key) {
     if (!_initialized) {

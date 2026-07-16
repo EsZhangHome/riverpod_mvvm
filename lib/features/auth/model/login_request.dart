@@ -23,12 +23,17 @@ part 'login_request.g.dart';
 /// 后续可以扩展字段（如验证码、设备信息等）。
 @JsonSerializable()
 class LoginRequest {
+  /// 创建登录请求。
+  ///
+  /// [account] 与 [password] 都是用户输入清洗后的值：当前 LoginNotifier 会 trim
+  /// account，但不会 trim password，因为空格可能就是密码的一部分。本构造函数只
+  /// 表达请求数据，不重复做表单校验。
   const LoginRequest({required this.account, required this.password});
 
-  /// 账号：手机号或邮箱
+  /// 登录账号。示例支持手机号或邮箱，真实项目可按后端协议改名/扩展。
   final String account;
 
-  /// 密码
+  /// 原始密码。只用于本次请求，不应写入 Provider 状态、持久化缓存或日志。
   final String password;
 
   /// 从 JSON Map 创建 LoginRequest。

@@ -1,22 +1,17 @@
 // 登录守卫规则测试。
 //
-// AuthRouteGuard 把状态读取和路径判断分开后，可以直接测试重定向矩阵，
-// 不需要启动 MaterialApp、GoRouter 或 ProviderScope。
+// AuthRouteGuard 的核心规则保持为纯函数，因此不需要启动 MaterialApp、GoRouter 或
+// ProviderScope，就能验证“会话恢复、公开/受保护深链、登录回跳和外部地址拦截”。
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/app/navigation/route_guard.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
 import 'package:riverpod_mvvm/shared/navigation/route_paths.dart';
 
-// 这里故意使用测试自己的“业务路由”，而不是导入某个真实 feature。
-//
-// AuthRouteGuard 是企业底座能力，它只关心“哪些地址受保护”，不应该知道
-// 首页、订单页等具体业务。测试遵守同一条依赖规则，替换业务模块后仍能原样运行。
 const _businessHome = '/business/home';
 const _businessRoot = '/business';
 const _businessOrders = '/business/orders';
-const _businessMine = '/business/mine';
-const _businessLearning = '/business/learning';
+const _publicHelp = '/help';
 
 void main() {
   const restoring = AuthState.restoring();
@@ -30,49 +25,94 @@ void main() {
   final guard = AuthRouteGuard(
     () => loggedOut,
     authenticatedHome: _businessHome,
-    protectedPaths: const [_businessLearning],
     protectedPrefixes: const [_businessRoot],
   );
 
-  group('AuthRouteGuard redirect matrix', () {
-    test('session restoration always stays on splash', () {
-      expect(
-        guard.redirectLocation(_businessHome, restoring),
-        RoutePaths.splash,
-      );
-      expect(guard.redirectLocation(RoutePaths.splash, restoring), isNull);
-    });
+  String returnToOf(String location) {
+    return Uri.parse(
+      location,
+    ).queryParameters[AuthRouteGuard.returnToQueryParameter]!;
+  }
 
-    test('leaving splash follows the restored login state', () {
+  group('AuthRouteGuard redirect matrix', () {
+    test('normal launch stays on session restoring until auth is known', () {
       expect(
-        guard.redirectLocation(RoutePaths.splash, loggedOut),
+        guard.redirectLocation(RoutePaths.sessionRestoring, restoring),
+        isNull,
+      );
+      expect(
+        guard.redirectLocation(RoutePaths.sessionRestoring, loggedOut),
         RoutePaths.login,
       );
       expect(
-        guard.redirectLocation(RoutePaths.splash, loggedIn),
+        guard.redirectLocation(RoutePaths.sessionRestoring, loggedIn),
         _businessHome,
       );
     });
 
-    test('logged-out users cannot enter protected routes', () {
-      for (final location in [
-        _businessRoot,
-        _businessHome,
-        _businessOrders,
-        _businessMine,
-        _businessLearning,
-      ]) {
-        expect(
-          guard.redirectLocation(location, loggedOut),
-          RoutePaths.login,
-          reason: '$location should require login',
-        );
-      }
+    test('restoring session preserves path, query, and fragment', () {
+      const target = '/business/orders/100?tab=history#latest';
+      final redirect = guard.redirectLocation(target, restoring)!;
+
+      expect(Uri.parse(redirect).path, RoutePaths.sessionRestoring);
+      expect(returnToOf(redirect), target);
     });
 
-    test('logged-in users leave login and can enter protected routes', () {
-      expect(guard.redirectLocation(RoutePaths.login, loggedIn), _businessHome);
-      expect(guard.redirectLocation(_businessOrders, loggedIn), isNull);
+    test('logged-out protected deep link goes to login with returnTo', () {
+      const target = '/business/orders/100?tab=history';
+      final restoringLocation = guard.redirectLocation(target, restoring)!;
+      final loginLocation = guard.redirectLocation(
+        restoringLocation,
+        loggedOut,
+      )!;
+
+      expect(Uri.parse(loginLocation).path, RoutePaths.login);
+      expect(returnToOf(loginLocation), target);
+      expect(guard.redirectLocation(loginLocation, loggedOut), isNull);
+      expect(guard.redirectLocation(loginLocation, loggedIn), target);
+    });
+
+    test(
+      'logged-out public deep link returns to public page after restore',
+      () {
+        const target = '$_publicHelp?article=start';
+        final restoringLocation = guard.redirectLocation(target, restoring)!;
+
+        expect(guard.redirectLocation(restoringLocation, loggedOut), target);
+      },
+    );
+
+    test('authenticated home is protected even when not listed explicitly', () {
+      final loginLocation = guard.redirectLocation(_businessHome, loggedOut)!;
+
+      expect(Uri.parse(loginLocation).path, RoutePaths.login);
+      expect(returnToOf(loginLocation), _businessHome);
+    });
+
+    test('protected prefix respects path segment boundary', () {
+      expect(guard.redirectLocation(_businessOrders, loggedOut), isNotNull);
+      expect(guard.redirectLocation('/business-v2', loggedOut), isNull);
+    });
+
+    test('external or internal flow returnTo is rejected', () {
+      for (final unsafeTarget in [
+        'https://evil.example/steal',
+        '//evil.example/steal',
+        RoutePaths.login,
+        RoutePaths.sessionRestoring,
+      ]) {
+        final loginLocation = Uri(
+          path: RoutePaths.login,
+          queryParameters: {
+            AuthRouteGuard.returnToQueryParameter: unsafeTarget,
+          },
+        ).toString();
+        expect(
+          guard.redirectLocation(loginLocation, loggedIn),
+          _businessHome,
+          reason: '$unsafeTarget must not be used as a redirect target',
+        );
+      }
     });
   });
 }

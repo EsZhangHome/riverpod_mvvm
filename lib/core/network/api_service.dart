@@ -32,12 +32,27 @@ import 'request_context.dart';
 /// 2. HTTP 调用、响应适配和异常转换可以集中替换，不散落到 Repository
 /// 3. Repository 只保留 CancelToken/ProgressCallback 的受控类型耦合
 abstract class ApiService {
+  /// 所有数据请求共同遵守的约定：
+  ///
+  /// - 泛型 `T` 是 Repository 期望拿到的业务数据类型，不是整个 HTTP body 类型；
+  /// - [fromJson] 只解析响应中的业务 data。复杂 Model 必须提供；简单 String、Map、
+  ///   List 且运行时类型完全一致时才可以省略；
+  /// - 成功返回 `ApiResponse<T>`，业务数据位于 `response.data`；
+  /// - HTTP、业务码和协议错误分别转换为 ApiException/BusinessException；
+  /// - CancelToken 取消后 Future 以取消异常结束，上层状态工具通常会静默忽略。
+  ///
+  /// 下面每个方法中的 [context] 都表示当前单次请求的元数据，例如 requestId、
+  /// 幂等键、是否允许网络重试和 401 后重放策略；它不是 BuildContext。
+
   /// GET 请求：通常用于获取列表、详情等读取类接口。
   ///
-  /// [path]：接口路径（不含 baseUrl），如 '/home/banners'
-  /// [queryParameters]：URL 查询参数，如 ?page=1&size=10
-  /// [cancelToken]：取消令牌；通常由 ViewModel 创建，并在 `ref.onDispose` 中取消
-  /// [fromJson]：将原始 JSON 转为业务 Model 的回调，如 (json) => UserModel.fromJson(json)
+  /// - [path]：接口路径（不含 baseUrl），例如 `/home/banners`；
+  /// - [queryParameters]：URL 查询参数 Map，例如 `{'page': 1, 'size': 20}`；Dio
+  ///   负责 URL 编码，不要手工把用户输入拼进 path；
+  /// - [cancelToken]：通常由 ViewModel 创建并在 `ref.onDispose` 中取消；
+  /// - [context]：当前请求的追踪、重试和临时 Header 配置；
+  /// - [fromJson]：把业务 data 转成 T，例如
+  ///   `(json) => UserModel.fromJson(json as Map<String, dynamic>)`。
   Future<ApiResponse<T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
@@ -48,11 +63,10 @@ abstract class ApiService {
 
   /// POST 请求：通常用于登录、创建资源、提交表单等写入类接口。
   ///
-  /// [path]：接口路径
-  /// [data]：请求体，可以是 Map、List 或自定义对象的 toJson() 结果
-  /// [queryParameters]：URL 查询参数
-  /// [cancelToken]：取消令牌
-  /// [fromJson]：JSON 转 Model 回调
+  /// - [path]、[queryParameters]、[cancelToken]、[fromJson] 含义同 GET；
+  /// - [data]：请求体，可以是 Map、List、FormData 或 Model.toJson() 结果；
+  /// - [context]：写请求默认不重试。只有后端支持幂等键时，才同时设置稳定
+  ///   idempotencyKey 与 allowRetry；支付等敏感操作还应把 replayPolicy 设为 never。
   Future<ApiResponse<T>> post<T>(
     String path, {
     dynamic data,
@@ -77,6 +91,9 @@ abstract class ApiService {
   });
 
   /// PATCH 请求：只更新资源的部分字段。
+  ///
+  /// 参数与 POST 相同。PATCH 默认不视为幂等；即使只改一个字段，也不能在未确认
+  /// 服务端语义时开启自动重试。
   Future<ApiResponse<T>> patch<T>(
     String path, {
     dynamic data,
@@ -92,6 +109,9 @@ abstract class ApiService {
   /// - 有些后端把删除参数放在 URL 路径中：/users/123
   /// - 有些后端把删除参数放在请求体中：{"ids": [1, 2, 3]}
   /// - 有些后端把删除参数放在查询参数中：?id=123
+  ///
+  /// 删除通常具有不可逆业务影响。虽然 HTTP 语义可能幂等，仍应根据后端实现决定
+  /// [context] 是否允许重试/重放，不能只凭方法名开启。
   Future<ApiResponse<T>> delete<T>(
     String path, {
     dynamic data,
@@ -109,6 +129,7 @@ abstract class ApiService {
   /// [data]：随文件一起发送的额外字段
   /// [onSendProgress]：上传进度回调，用于显示进度条
   /// [cancelToken]：取消令牌
+  /// [context]：请求元数据；ApiClient 会强制禁止上传流自动重放
   /// [fromJson]：JSON 转 Model 回调（上传结果通常返回文件 URL 等）
   Future<ApiResponse<T>> upload<T>(
     String path, {
@@ -122,6 +143,16 @@ abstract class ApiService {
   });
 
   /// 下载文件到 [savePath]，支持进度回调和生命周期取消。
+  ///
+  /// - [path]：远端文件接口路径；
+  /// - [savePath]：设备上最终写入的完整文件路径，目录存在性和存储权限由调用方保证；
+  /// - [queryParameters]：下载地址的查询参数；
+  /// - [onReceiveProgress]：回调参数依次是已接收字节数和总字节数；服务器未提供
+  ///   Content-Length 时总数可能不可用，UI 不应盲目相除；
+  /// - [cancelToken]：页面离开或用户点击停止时取消；
+  /// - [context]：可携带 requestId/Header，但 ApiClient 强制禁止文件流自动重放。
+  ///
+  /// 成功完成时文件已经写入；本方法没有业务 data，所以返回 `Future<void>`。
   Future<void> download(
     String path,
     String savePath, {
