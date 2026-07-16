@@ -13,8 +13,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/l10n/app_strings.dart';
-import '../../../core/theme/app_spacing.dart';
+import '../../../shared/localization/app_strings.dart';
+import '../../../shared/theme/app_spacing.dart';
 import '../model/order.dart';
 import '../view_model/order_view_model.dart';
 

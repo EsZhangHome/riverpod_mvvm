@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:riverpod_mvvm/core/l10n/app_strings.dart';
+import 'package:riverpod_mvvm/shared/localization/app_strings.dart';
 import 'package:riverpod_mvvm/features/orders/model/order.dart';
 import 'package:riverpod_mvvm/features/orders/repository/order_repository.dart';
 import 'package:riverpod_mvvm/features/orders/view_model/order_view_model.dart';

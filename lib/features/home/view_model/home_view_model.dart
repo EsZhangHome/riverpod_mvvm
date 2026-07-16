@@ -10,9 +10,9 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/base/async_request_handler.dart';
-import '../../../core/base/view_state.dart';
-import '../../../core/providers/repositories.dart';
+import '../../../shared/state/async_request_handler.dart';
+import '../../../shared/state/view_state.dart';
+import '../home_providers.dart';
 import '../model/home_banner.dart';
 
 // ==================== 状态类 ====================

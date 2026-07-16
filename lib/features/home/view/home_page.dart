@@ -15,9 +15,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/l10n/app_strings.dart';
-import '../../../core/router/route_paths.dart';
-import '../../../core/theme/app_spacing.dart';
+import '../../../shared/localization/app_strings.dart';
+import '../../../shared/navigation/route_paths.dart';
+import '../../../shared/theme/app_spacing.dart';
 import '../model/product.dart';
 import '../view_model/catalog_view_model.dart';
 

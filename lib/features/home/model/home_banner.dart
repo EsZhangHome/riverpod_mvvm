@@ -4,7 +4,7 @@
 //
 // 放在 features/home/model/ 的原因：
 // HomeBanner 是首页模块专用的数据模型，其他模块不会用到，
-// 所以放在 features/home 下而不是 shared/models。
+// 所以由 features/home 持有，不提升为无业务归属的 shared 类型。
 //
 // 设计要点：
 // 1. 使用 json_serializable 生成 fromJson / toJson，避免手写字段映射错误

@@ -15,7 +15,7 @@
 
 import 'package:dio/dio.dart';
 
-import '../l10n/app_strings.dart';
+import 'network_error_messages.dart';
 
 /// 网络层统一异常。
 ///
@@ -69,7 +69,7 @@ class ApiException implements Exception {
       case DioExceptionType.receiveTimeout:
         return const ApiException(
           code: timeoutError,
-          message: AppStrings.requestTimeout,
+          message: NetworkErrorMessages.requestTimeout,
         );
 
       // ---- 服务器返回错误 ----
@@ -86,7 +86,7 @@ class ApiException implements Exception {
       case DioExceptionType.cancel:
         return const ApiException(
           code: cancelledError,
-          message: AppStrings.requestCanceled,
+          message: NetworkErrorMessages.requestCanceled,
         );
 
       // ---- 网络连接异常 ----
@@ -94,7 +94,7 @@ class ApiException implements Exception {
       case DioExceptionType.connectionError:
         return const ApiException(
           code: networkError,
-          message: AppStrings.networkError,
+          message: NetworkErrorMessages.networkError,
         );
 
       // ---- 证书校验失败 ----
@@ -102,7 +102,7 @@ class ApiException implements Exception {
       case DioExceptionType.badCertificate:
         return const ApiException(
           code: networkError,
-          message: AppStrings.certificateError,
+          message: NetworkErrorMessages.certificateError,
         );
 
       // ---- 未知错误 ----
@@ -110,7 +110,7 @@ class ApiException implements Exception {
       case DioExceptionType.unknown:
         return const ApiException(
           code: unknownError,
-          message: AppStrings.unknownError,
+          message: NetworkErrorMessages.unknownError,
         );
     }
   }
@@ -126,7 +126,7 @@ class ApiException implements Exception {
       return data['message'] as String;
     }
     // 后端没有提供 message，使用默认文案
-    return AppStrings.serverError;
+    return NetworkErrorMessages.serverError;
   }
 
   @override

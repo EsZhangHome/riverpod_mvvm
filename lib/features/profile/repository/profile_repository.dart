@@ -11,7 +11,7 @@ import '../../../core/config/env_config.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/endpoints.dart';
-import '../../../shared/models/user_model.dart';
+import '../../auth/auth.dart';
 
 abstract class ProfileRepository {
   /// fallbackUser 让 Mock/弱网场景可以复用当前会话中的基础资料。

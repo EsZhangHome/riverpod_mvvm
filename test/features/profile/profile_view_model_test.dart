@@ -3,11 +3,11 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:riverpod_mvvm/core/base/view_state.dart';
-import 'package:riverpod_mvvm/core/providers/repositories.dart';
+import 'package:riverpod_mvvm/shared/state/view_state.dart';
+import 'package:riverpod_mvvm/features/profile/profile_providers.dart';
 import 'package:riverpod_mvvm/features/profile/repository/profile_repository.dart';
 import 'package:riverpod_mvvm/features/profile/view_model/profile_view_model.dart';
-import 'package:riverpod_mvvm/shared/models/user_model.dart';
+import 'package:riverpod_mvvm/features/auth/auth.dart';
 
 class _FakeProfileRepository implements ProfileRepository {
   int callCount = 0;

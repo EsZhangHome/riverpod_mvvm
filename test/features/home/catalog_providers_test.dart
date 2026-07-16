@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/features/home/model/product.dart';
+import 'package:riverpod_mvvm/features/home/home_providers.dart';
 import 'package:riverpod_mvvm/features/home/repository/product_repository.dart';
 import 'package:riverpod_mvvm/features/home/view_model/catalog_view_model.dart';
-import 'package:riverpod_mvvm/global/auth_provider.dart';
-import 'package:riverpod_mvvm/shared/models/user_model.dart';
+import 'package:riverpod_mvvm/features/auth/auth.dart';
 
 class _FakeAuthNotifier extends AuthNotifier {
   @override

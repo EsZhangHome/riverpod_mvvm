@@ -6,17 +6,11 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../global/auth_provider.dart';
+import '../../auth/auth.dart';
+import '../home_providers.dart';
 import '../model/product.dart';
-import '../repository/product_repository.dart';
 
-// 1. Provider：依赖注入。
-// 测试可以 override 此 Provider，无需修改 ViewModel 构造函数或使用全局 locator。
-final productRepositoryProvider = Provider<ProductRepository>((ref) {
-  return LocalProductRepository();
-});
-
-// 2. Provider：把 Repository 数据暴露给其他 Provider。
+// Provider：把 Repository 数据暴露给其他 Provider。
 final productsProvider = Provider<List<Product>>((ref) {
   return ref.watch(productRepositoryProvider).getProducts();
 });

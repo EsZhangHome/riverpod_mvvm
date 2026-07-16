@@ -7,11 +7,11 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/base/async_request_handler.dart';
-import '../../../core/base/view_state.dart';
-import '../../../core/l10n/app_strings.dart';
-import '../../../core/providers/repositories.dart';
-import '../../../shared/models/user_model.dart';
+import '../../../shared/state/async_request_handler.dart';
+import '../../../shared/state/view_state.dart';
+import '../../../shared/localization/app_strings.dart';
+import '../../auth/auth.dart';
+import '../profile_providers.dart';
 
 // ==================== 状态类 ====================
 

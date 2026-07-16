@@ -20,7 +20,7 @@
 
 import 'package:dio/dio.dart';
 
-import '../../../core/base/cache_policy.dart';
+import '../../../core/cache/cache_policy.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/endpoints.dart';

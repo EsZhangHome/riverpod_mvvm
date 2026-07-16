@@ -10,10 +10,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/app/app_info_service.dart';
-import '../../../core/l10n/app_strings.dart';
+import '../../../shared/localization/app_strings.dart';
 import '../../../core/network/network_status_service.dart';
-import '../../../core/providers/services.dart';
-import '../../../global/auth_provider.dart';
+import '../../../core/providers/service_providers.dart';
+import '../../auth/auth.dart';
 
 /// FutureProvider 适合只有“读取”行为、无需公开命令方法的异步数据。
 /// AppInfoService 自带缓存；Provider 只负责把 Future 转成 AsyncValue。

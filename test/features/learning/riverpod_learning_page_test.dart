@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:riverpod_mvvm/core/l10n/app_strings.dart';
+import 'package:riverpod_mvvm/shared/localization/app_strings.dart';
 import 'package:riverpod_mvvm/features/learning/model/riverpod_lesson.dart';
 import 'package:riverpod_mvvm/features/learning/view/riverpod_learning_page.dart';
 

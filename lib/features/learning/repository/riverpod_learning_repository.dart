@@ -6,7 +6,7 @@
 // 本文件中的长字符串是“展示给学习者的示例源码”，不会被 Dart 执行；
 // 真正可运行的完整实现应继续对照对应 feature 源文件阅读。
 
-import '../../../core/l10n/app_strings.dart';
+import '../../../shared/localization/app_strings.dart';
 import '../model/riverpod_lesson.dart';
 
 abstract interface class RiverpodLearningRepository {

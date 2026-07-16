@@ -16,10 +16,10 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/l10n/app_strings.dart';
+import '../../../shared/localization/app_strings.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/utils/logger.dart';
-import '../../../global/auth_provider.dart';
+import '../../auth/auth.dart';
 import '../model/order.dart';
 import '../repository/order_repository.dart';
 

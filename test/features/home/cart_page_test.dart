@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:riverpod_mvvm/core/l10n/app_strings.dart';
+import 'package:riverpod_mvvm/shared/localization/app_strings.dart';
 import 'package:riverpod_mvvm/features/home/model/product.dart';
+import 'package:riverpod_mvvm/features/home/home_providers.dart';
 import 'package:riverpod_mvvm/features/home/repository/product_repository.dart';
 import 'package:riverpod_mvvm/features/home/view/cart_page.dart';
 import 'package:riverpod_mvvm/features/home/view_model/catalog_view_model.dart';

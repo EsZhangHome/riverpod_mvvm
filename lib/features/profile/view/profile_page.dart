@@ -9,12 +9,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/base/page_shell.dart';
-import '../../../core/l10n/app_strings.dart';
-import '../../../core/router/route_paths.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../global/auth_provider.dart';
-import '../../../shared/widgets/user_info_card.dart';
+import '../../../shared/ui/page_shell.dart';
+import '../../../shared/localization/app_strings.dart';
+import '../../../shared/navigation/route_paths.dart';
+import '../../../shared/theme/app_spacing.dart';
+import '../../auth/auth.dart';
+import '../../../shared/ui/user_info_card.dart';
 import '../view_model/profile_view_model.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {

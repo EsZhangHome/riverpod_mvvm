@@ -16,12 +16,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/l10n/app_strings.dart';
+import '../../../shared/localization/app_strings.dart';
 import '../../../core/network/network_status_service.dart';
-import '../../../core/router/route_paths.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../global/auth_provider.dart';
-import '../../../global/theme_provider.dart';
+import '../../../shared/navigation/route_paths.dart';
+import '../../../shared/theme/app_spacing.dart';
+import '../../auth/auth.dart';
+import '../../../shared/theme/theme_provider.dart';
 import '../view_model/mine_view_model.dart';
 
 class MinePage extends ConsumerWidget {
