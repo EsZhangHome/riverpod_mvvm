@@ -5,10 +5,13 @@
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../errors/app_failure.dart';
+import '../errors/storage_exception.dart';
+
 /// 系统安全存储提供的最小能力。
 abstract interface class SecureStorageService {
   /// 读取 [key] 对应的敏感字符串；不存在时返回 null。
-  /// 平台通道、解密或 Keychain/Keystore 异常会继续抛出。
+  /// 平台通道、解密或 Keychain/Keystore 异常统一转换为 StorageException。
   Future<String?> read(String key);
 
   /// 把 [value] 写入 [key]。同 key 写入通常覆盖旧值；是否需要先序列化完整对象由
@@ -33,13 +36,34 @@ class FlutterSecureStorageService implements SecureStorageService {
   final FlutterSecureStorage _storage;
 
   @override
-  Future<String?> read(String key) => _storage.read(key: key);
-
-  @override
-  Future<void> write(String key, String value) {
-    return _storage.write(key: key, value: value);
+  Future<String?> read(String key) {
+    return _guard('Secure storage read failed', () => _storage.read(key: key));
   }
 
   @override
-  Future<void> delete(String key) => _storage.delete(key: key);
+  Future<void> write(String key, String value) {
+    return _guard(
+      'Secure storage write failed',
+      () => _storage.write(key: key, value: value),
+    );
+  }
+
+  @override
+  Future<void> delete(String key) {
+    return _guard(
+      'Secure storage delete failed',
+      () => _storage.delete(key: key),
+    );
+  }
+
+  /// 把插件异常转换成稳定类型，同时避免记录 key/value 等敏感参数。
+  Future<T> _guard<T>(String message, Future<T> Function() action) async {
+    try {
+      return await action();
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error, stackTrace) {
+      throw StorageException(message, cause: error, stackTrace: stackTrace);
+    }
+  }
 }

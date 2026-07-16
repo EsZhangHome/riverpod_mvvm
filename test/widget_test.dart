@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:riverpod_mvvm/app/app.dart';
 import 'package:riverpod_mvvm/app/navigation/app_route_bundle.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
-import 'package:riverpod_mvvm/shared/localization/app_strings.dart';
+import 'package:riverpod_mvvm/l10n/app_localizations.dart';
 import 'package:riverpod_mvvm/shared/ui/error_view.dart';
 
 const _testHomePath = '/test-home';
@@ -73,16 +73,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('登录'), findsWidgets);
+    expect(find.byKey(const ValueKey('login.submit')), findsOneWidget);
     expect(find.text('Riverpod MVVM'), findsOneWidget);
 
     // authenticatedHome 即使没有重复加入 protectedPaths，也必须被守卫自动拦截。
     tester
-        .element(find.text(AppStrings.login).first)
+        .element(find.byKey(const ValueKey('login.submit')))
         .go(routeBundle.authenticatedHome);
     await tester.pumpAndSettle();
-    expect(find.text(AppStrings.login), findsWidgets);
-    expect(find.text(AppStrings.pageNotFound), findsNothing);
+    expect(find.byKey(const ValueKey('login.submit')), findsOneWidget);
+    expect(find.byType(ErrorView), findsNothing);
 
     // 默认 MyApp 只注册底座页面，具体业务路由必须由项目入口显式注入。
   });
@@ -100,12 +100,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(ElevatedButton, AppStrings.login));
+    await tester.tap(find.byKey(const ValueKey('login.submit')));
     // 第一次 pump 处理 Provider 更新，第二次推进 Overlay Toast 的进入动画。
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text(AppStrings.enterAccount), findsOneWidget);
+    final loginContext = tester.element(
+      find.byKey(const ValueKey('login.submit')),
+    );
+    expect(
+      find.text(AppLocalizations.of(loginContext).enterAccount),
+      findsOneWidget,
+    );
     expect(find.byType(TextField), findsNWidgets(2));
     expect(find.byType(ErrorView), findsNothing);
   });
@@ -130,19 +136,19 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('登录'), findsNothing);
+    expect(find.byKey(const ValueKey('login.submit')), findsNothing);
 
     await tester.pumpAndSettle();
 
     // 保存的完整会话会直接进入项目首页，不先闪现登录页。
     expect(find.byType(_TestHomePage), findsOneWidget);
-    expect(find.text(AppStrings.login), findsNothing);
+    expect(find.byKey(const ValueKey('login.submit')), findsNothing);
 
     // 退出只更新 AuthState；通用守卫负责“首页 → 登录”的完整闭环。
     await tester.tap(find.byKey(const ValueKey('logout')));
     await tester.pumpAndSettle();
     expect(store.session, isNull);
-    expect(find.text(AppStrings.login), findsWidgets);
+    expect(find.byKey(const ValueKey('login.submit')), findsOneWidget);
   });
 }
 

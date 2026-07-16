@@ -9,19 +9,18 @@
 //
 // 设计要点：
 // 1. 每个方法都支持泛型 <T>，通过 fromJson 回调把原始 JSON 转成业务 Model
-// 2. 每个方法都支持 CancelToken，ViewModel 可把它绑定到 Provider 生命周期
+// 2. 每个方法都支持底座自有取消令牌，ViewModel 可把它绑定到 Provider 生命周期
 // 3. 数据请求返回 ApiResponse<T>；无业务响应体的下载返回 Future<void>
 // 4. upload 方法单独处理文件上传，因为文件上传需要 FormData 和进度回调
 //
 // 为什么需要这个接口：
 // - 测试时不需要启动真实服务器，传入 FakeApiService 即可
 // - Repository 不接触 Dio 实例、Options、Interceptor 和 DioException
-// - CancelToken/ProgressCallback 仍是刻意保留的 Dio 生命周期类型；若未来彻底
-//   更换网络库，需要先在本接口抽象取消令牌与进度回调，再迁移 Repository 签名
-
-import 'package:dio/dio.dart';
+// - 取消令牌和进度回调已经是纯 Dart 类型，Dio 只存在于 ApiClient 实现内部；
+//   未来更换 HTTP 客户端时，Repository、UseCase 和 ViewModel 的签名无需迁移
 
 import 'api_response.dart';
+import 'request_cancellation.dart';
 import 'request_context.dart';
 
 /// 网络服务抽象接口。
@@ -30,7 +29,7 @@ import 'request_context.dart';
 /// 这样做的好处：
 /// 1. 单元测试时可以传入 FakeApiService，不需要真实网络请求
 /// 2. HTTP 调用、响应适配和异常转换可以集中替换，不散落到 Repository
-/// 3. Repository 只保留 CancelToken/ProgressCallback 的受控类型耦合
+/// 3. Repository 不依赖 Dio，取消和进度也使用底座稳定抽象
 abstract class ApiService {
   /// 所有数据请求共同遵守的约定：
   ///
@@ -39,7 +38,7 @@ abstract class ApiService {
   ///   List 且运行时类型完全一致时才可以省略；
   /// - 成功返回 `ApiResponse<T>`，业务数据位于 `response.data`；
   /// - HTTP、业务码和协议错误分别转换为 ApiException/BusinessException；
-  /// - CancelToken 取消后 Future 以取消异常结束，上层状态工具通常会静默忽略。
+  /// - 取消令牌触发后 Future 以统一 cancellation 失败结束，上层状态工具静默忽略。
   ///
   /// 下面每个方法中的 [context] 都表示当前单次请求的元数据，例如 requestId、
   /// 幂等键、是否允许网络重试和 401 后重放策略；它不是 BuildContext。
@@ -56,7 +55,7 @@ abstract class ApiService {
   Future<ApiResponse<T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   });
@@ -71,7 +70,7 @@ abstract class ApiService {
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   });
@@ -85,7 +84,7 @@ abstract class ApiService {
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   });
@@ -98,7 +97,7 @@ abstract class ApiService {
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   });
@@ -116,7 +115,7 @@ abstract class ApiService {
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   });
@@ -136,8 +135,8 @@ abstract class ApiService {
     required String filePath,
     String fileField = 'file',
     Map<String, dynamic>? data,
-    ProgressCallback? onSendProgress,
-    CancelToken? cancelToken,
+    RequestProgressCallback? onSendProgress,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   });
@@ -157,8 +156,8 @@ abstract class ApiService {
     String path,
     String savePath, {
     Map<String, dynamic>? queryParameters,
-    ProgressCallback? onReceiveProgress,
-    CancelToken? cancelToken,
+    RequestProgressCallback? onReceiveProgress,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
   });
 }

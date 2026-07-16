@@ -33,8 +33,8 @@ import 'api_exception.dart';
 import 'api_response.dart';
 import 'api_service.dart';
 import 'dio_interceptor.dart';
-import 'network_quality_monitor.dart';
 import 'request_context.dart';
+import 'request_cancellation.dart';
 import 'response_adapter.dart';
 import 'token_refresh_coordinator.dart';
 
@@ -67,13 +67,8 @@ class ApiClient implements ApiService {
   ///
   /// 构造函数只负责创建基础设施，不会立即发起网络请求。调用方应让 Riverpod
   /// 托管本实例，并在 Provider 销毁时调用 [close] 释放连接池。
-  /// - [networkQualityMonitor]：可选真实请求质量监控器。由 Provider 传入后，
-  ///   ApiClient 只负责上报耗时/传输失败，不直接显示全局提示。
-  ApiClient({
-    Dio? dio,
-    ResponseAdapter? responseAdapter,
-    this.networkQualityMonitor,
-  }) : _responseAdapter = responseAdapter ?? const EnvelopeResponseAdapter() {
+  ApiClient({Dio? dio, ResponseAdapter? responseAdapter})
+    : _responseAdapter = responseAdapter ?? const EnvelopeResponseAdapter() {
     _dio =
         dio ??
         Dio(
@@ -116,9 +111,6 @@ class ApiClient implements ApiService {
   /// 同一套成功码、消息字段和 data 解码规则。若项目存在多套完全不同的后端协议，
   /// 应按服务域创建不同 ApiClient，而不是在单个请求中临时切换协议。
   final ResponseAdapter _responseAdapter;
-
-  /// 可选的请求质量采样边界。null 表示调用方不需要弱网质量判断。
-  final NetworkQualityMonitor? networkQualityMonitor;
 
   /// token 提供者回调，由认证网络组合 Provider 注入。
   ///
@@ -246,19 +238,20 @@ class ApiClient implements ApiService {
   Future<ApiResponse<T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) {
     return _request<T>(
       // 传入闭包，延迟执行，_request 内部统一处理异常和解析
-      () => _dio.get<dynamic>(
+      (dioCancelToken) => _dio.get<dynamic>(
         path,
         queryParameters: queryParameters,
-        cancelToken: cancelToken,
+        cancelToken: dioCancelToken,
         options: _options(context),
       ),
       fromJson,
+      cancellation: cancelToken,
     );
   }
 
@@ -277,19 +270,20 @@ class ApiClient implements ApiService {
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) {
     return _request<T>(
-      () => _dio.post<dynamic>(
+      (dioCancelToken) => _dio.post<dynamic>(
         path,
         data: data,
         queryParameters: queryParameters,
-        cancelToken: cancelToken,
+        cancelToken: dioCancelToken,
         options: _options(context),
       ),
       fromJson,
+      cancellation: cancelToken,
     );
   }
 
@@ -302,19 +296,20 @@ class ApiClient implements ApiService {
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) {
     return _request<T>(
-      () => _dio.put<dynamic>(
+      (dioCancelToken) => _dio.put<dynamic>(
         path,
         data: data,
         queryParameters: queryParameters,
-        cancelToken: cancelToken,
+        cancelToken: dioCancelToken,
         options: _options(context),
       ),
       fromJson,
+      cancellation: cancelToken,
     );
   }
 
@@ -327,19 +322,20 @@ class ApiClient implements ApiService {
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) {
     return _request<T>(
-      () => _dio.patch<dynamic>(
+      (dioCancelToken) => _dio.patch<dynamic>(
         path,
         data: data,
         queryParameters: queryParameters,
-        cancelToken: cancelToken,
+        cancelToken: dioCancelToken,
         options: _options(context),
       ),
       fromJson,
+      cancellation: cancelToken,
     );
   }
 
@@ -351,19 +347,20 @@ class ApiClient implements ApiService {
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) {
     return _request<T>(
-      () => _dio.delete<dynamic>(
+      (dioCancelToken) => _dio.delete<dynamic>(
         path,
         data: data,
         queryParameters: queryParameters,
-        cancelToken: cancelToken,
+        cancelToken: dioCancelToken,
         options: _options(context),
       ),
       fromJson,
+      cancellation: cancelToken,
     );
   }
 
@@ -386,8 +383,8 @@ class ApiClient implements ApiService {
     required String filePath,
     String fileField = 'file',
     Map<String, dynamic>? data,
-    ProgressCallback? onSendProgress,
-    CancelToken? cancelToken,
+    RequestProgressCallback? onSendProgress,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) async {
@@ -400,14 +397,15 @@ class ApiClient implements ApiService {
     });
     return _request<T>(
       // 上传使用 POST 方法，data 为 FormData
-      () => _dio.post<dynamic>(
+      (dioCancelToken) => _dio.post<dynamic>(
         path,
         data: formData,
         onSendProgress: onSendProgress,
-        cancelToken: cancelToken,
+        cancelToken: dioCancelToken,
         options: _options(context, forceNeverReplay: true),
       ),
       fromJson,
+      cancellation: cancelToken,
     );
   }
 
@@ -416,21 +414,24 @@ class ApiClient implements ApiService {
     String path,
     String savePath, {
     Map<String, dynamic>? queryParameters,
-    ProgressCallback? onReceiveProgress,
-    CancelToken? cancelToken,
+    RequestProgressCallback? onReceiveProgress,
+    RequestCancellationToken? cancelToken,
     RequestContext? context,
   }) async {
+    final cancellationBinding = _DioCancellationBinding(cancelToken);
     try {
       await _dio.download(
         path,
         savePath,
         queryParameters: queryParameters,
         onReceiveProgress: onReceiveProgress,
-        cancelToken: cancelToken,
+        cancelToken: cancellationBinding.token,
         options: _options(context, forceNeverReplay: true),
       );
     } on DioException catch (error) {
       throw ApiException.fromDioException(error);
+    } finally {
+      cancellationBinding.dispose();
     }
   }
 
@@ -449,8 +450,8 @@ class ApiClient implements ApiService {
   /// 5. 把模型解码或协议不匹配转换为协议错误，交给上层统一生成安全提示文案。
   ///
   /// 参数说明：
-  /// - [request]：真正执行 Dio 请求的异步闭包。使用闭包可让所有 HTTP 方法共用
-  ///   同一套成功判断、异常边界和响应解析流程；
+  /// - [request]：真正执行 Dio 请求的异步闭包。参数是本次临时 Dio CancelToken；
+  ///   使用闭包可让所有 HTTP 方法共用同一套取消绑定、异常边界和响应解析流程；
   /// - [fromJson]：把响应协议中 data 字段转换成 T。返回类型复杂时必须提供；
   ///   如果转换函数本身抛错，会被归类为响应协议/解码错误，而不是网络断开。
   ///
@@ -458,12 +459,14 @@ class ApiClient implements ApiService {
   /// [BusinessException]，Dio 错误会抛稳定的 [ApiException]；调用方无需识别
   /// `DioExceptionType`。
   Future<ApiResponse<T>> _request<T>(
-    Future<Response<dynamic>> Function() request,
-    T Function(dynamic json)? fromJson,
-  ) async {
+    Future<Response<dynamic>> Function(CancelToken? cancelToken) request,
+    T Function(dynamic json)? fromJson, {
+    RequestCancellationToken? cancellation,
+  }) async {
+    final cancellationBinding = _DioCancellationBinding(cancellation);
     try {
       // ---- 步骤 1：执行 HTTP 请求 ----
-      final response = await request();
+      final response = await request(cancellationBinding.token);
       final apiResponse = _responseAdapter.adapt<T>(response, fromJson);
       if (!apiResponse.isSuccess) {
         throw BusinessException(
@@ -479,12 +482,13 @@ class ApiClient implements ApiService {
       throw ApiException.fromDioException(error);
     } on ApiException {
       rethrow;
-    } on Object catch (error) {
+    } on Object catch (error, stackTrace) {
       // decoder/协议不匹配不属于网络失败，转成稳定的协议错误交给上层解析。
-      throw ApiException(
-        code: ApiException.unknownError,
-        message: 'Response decoding failed: $error',
-      );
+      throw ApiException.protocol(error, stackTrace);
+    } finally {
+      // 请求无论成功、失败还是取消都解除监听。否则长生命周期页面重复请求时，
+      // 已经完成的 Dio CancelToken 会一直挂在业务取消令牌上直到页面销毁。
+      cancellationBinding.dispose();
     }
   }
 
@@ -495,21 +499,19 @@ class ApiClient implements ApiService {
   /// 等客户端控制信息会进入 extra，供拦截器读取，不会自动发送给服务器。
   ///
   /// [forceNeverReplay] 用于上传、下载等流式请求。即使调用方误传了允许重放的
-  /// context，也会强制写入 `replayDisabled`，避免文件流被 401/弱网重试重复消费。
+  /// context，也会强制写入 `replayDisabled`，避免文件流被 401 刷新流程重复消费。
   Options? _options(RequestContext? context, {bool forceNeverReplay = false}) {
     if (context == null && !forceNeverReplay) return null;
     return Options(
       headers: {
         ...?context?.headers,
-        if (context?.idempotencyKey != null)
+        if (context?.idempotencyKey?.trim().isNotEmpty ?? false)
           'Idempotency-Key': context!.idempotencyKey,
       },
       extra: {
         ...?context?.extra,
         if (context?.requestId != null) 'requestId': context!.requestId,
         if (context?.allowRetry ?? false) 'allowRetry': true,
-        if (forceNeverReplay || context?.trackNetworkQuality == false)
-          'networkQualityExcluded': true,
         if (forceNeverReplay ||
             context?.replayPolicy == RequestReplayPolicy.never)
           'replayDisabled': true,
@@ -534,9 +536,8 @@ class ApiClient implements ApiService {
   /// 1. RequestMetadataInterceptor → 补充请求 ID
   /// 2. TokenInterceptor           → 请求前动态注入 Authorization header
   /// 3. AppLogInterceptor          → 向当前 LogSink 记录脱敏元数据
-  /// 4. NetworkQualityInterceptor  → 采集真实请求耗时与传输失败
-  /// 5. UnauthorizedInterceptor    → 捕获 401，并尝试刷新与安全重放
-  /// 6. RetryInterceptor           → 按白名单重试临时网络错误
+  /// 4. UnauthorizedInterceptor → 捕获 401，并尝试刷新与安全重放
+  /// 5. RetryInterceptor        → 按白名单重试临时网络错误
   void _configureInterceptors() {
     // 0. 请求追踪标识。
     _dio.interceptors.add(RequestMetadataInterceptor());
@@ -549,17 +550,12 @@ class ApiClient implements ApiService {
     // 2. 脱敏网络日志。是否真正输出由 AppLogger 当前配置的 LogSink 决定。
     _dio.interceptors.add(AppLogInterceptor());
 
-    // 3. 网络质量采样是可选能力；未注入 Monitor 时完全不安装，也不产生额外对象。
-    final qualityMonitor = networkQualityMonitor;
-    if (qualityMonitor != null) {
-      _dio.interceptors.add(NetworkQualityInterceptor(monitor: qualityMonitor));
-    }
-
-    // 4. 401 处理。闭包在真正发生 401 时读取最新刷新回调，不需要重建拦截器。
+    // 3. 401 处理。闭包在真正发生 401 时读取最新刷新回调，不需要重建拦截器。
     _dio.interceptors.add(
       UnauthorizedInterceptor(
         guard: _unauthorizedGuard,
         dio: _dio,
+        currentAccessToken: () => _tokenProvider?.call(),
         refreshAccessToken: () async {
           final callback = _refreshAccessToken;
           return callback == null ? null : callback();
@@ -567,7 +563,37 @@ class ApiClient implements ApiService {
       ),
     );
 
-    // 5. 网络重试：默认只重试 GET/HEAD 的临时连接错误；写请求必须显式声明幂等。
+    // 4. 网络重试：默认只重试 GET/HEAD 的临时连接错误；写请求必须显式声明幂等。
     _dio.interceptors.add(RetryInterceptor(dio: _dio));
+  }
+}
+
+/// 一次底座取消令牌到 Dio CancelToken 的临时绑定。
+///
+/// 这是整个项目中允许认识 Dio CancelToken 的边界。每次 HTTP 调用创建一份绑定，
+/// 请求结束后 [dispose] 立即解除监听；Repository、UseCase 和 ViewModel 不会接触 Dio。
+final class _DioCancellationBinding {
+  _DioCancellationBinding(RequestCancellationToken? cancellation) {
+    if (cancellation == null) return;
+
+    final dioToken = CancelToken();
+    token = dioToken;
+    // listen 会正确处理“调用前已经取消”的令牌，因此这里不需要先读再监听，避免
+    // 两个操作之间发生取消导致丢信号。
+    _registration = cancellation.listen((reason) {
+      if (!dioToken.isCancelled) dioToken.cancel(reason);
+    });
+  }
+
+  /// 交给 Dio 请求的底层令牌；上层没有传取消能力时为 null。
+  CancelToken? token;
+
+  /// 请求结束时用它从业务令牌移除监听。
+  RequestCancellationRegistration? _registration;
+
+  /// 解除本次请求绑定，不会反向取消已经结束的业务令牌。
+  void dispose() {
+    _registration?.dispose();
+    _registration = null;
   }
 }

@@ -4,12 +4,11 @@
 // ViewModel 不知道这些数据是内存模拟；接真实 API 时只替换实现。
 //
 // 调用链：OrderFeedNotifier -> OrderRepository -> Future/Stream -> State。
-// 所有 Future 都接收 CancelToken，使 Mock 和真实 Dio 具有一致取消语义。
+// 所有 Future 都接收底座取消令牌，使 Mock 和真实网络请求具有一致取消语义。
 
 import 'dart:async';
 
-import 'package:dio/dio.dart';
-
+import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import '../model/order.dart';
 
 abstract interface class OrderRepository {
@@ -17,15 +16,15 @@ abstract interface class OrderRepository {
   Future<OrderPageResult> fetchOrders({
     required int page,
     int pageSize = 3,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
   });
 
   /// family 详情 Provider 按 id 调用。
-  Future<Order> fetchOrder(String id, {CancelToken? cancelToken});
+  Future<Order> fetchOrder(String id, {RequestCancellationToken? cancelToken});
 
   /// 创建和取消是局部命令，完成后返回服务端最终实体。
-  Future<Order> createOrder({CancelToken? cancelToken});
-  Future<Order> cancelOrder(String id, {CancelToken? cancelToken});
+  Future<Order> createOrder({RequestCancellationToken? cancelToken});
+  Future<Order> cancelOrder(String id, {RequestCancellationToken? cancelToken});
 
   /// 连续状态使用 Stream，而不是反复轮询 FutureProvider。
   Stream<OrderStatus> watchOrderStatus(String id);
@@ -49,7 +48,7 @@ class MockOrderRepository implements OrderRepository {
   Future<OrderPageResult> fetchOrders({
     required int page,
     int pageSize = 3,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
   }) async {
     // 步骤 1：先模拟可取消的网络等待。
     await _simulateLatency(const Duration(milliseconds: 500), cancelToken);
@@ -67,13 +66,16 @@ class MockOrderRepository implements OrderRepository {
   }
 
   @override
-  Future<Order> fetchOrder(String id, {CancelToken? cancelToken}) async {
+  Future<Order> fetchOrder(
+    String id, {
+    RequestCancellationToken? cancelToken,
+  }) async {
     await _simulateLatency(const Duration(milliseconds: 280), cancelToken);
     return _findOrder(id);
   }
 
   @override
-  Future<Order> createOrder({CancelToken? cancelToken}) async {
+  Future<Order> createOrder({RequestCancellationToken? cancelToken}) async {
     await _simulateLatency(const Duration(milliseconds: 450), cancelToken);
     // 模拟服务端生成 id、默认状态和创建时间。
     final order = Order(
@@ -89,7 +91,10 @@ class MockOrderRepository implements OrderRepository {
   }
 
   @override
-  Future<Order> cancelOrder(String id, {CancelToken? cancelToken}) async {
+  Future<Order> cancelOrder(
+    String id, {
+    RequestCancellationToken? cancelToken,
+  }) async {
     await _simulateLatency(const Duration(milliseconds: 400), cancelToken);
     // 先查最新服务端对象，不能相信客户端传来的旧状态。
     final index = _findOrderIndex(id);
@@ -135,22 +140,30 @@ class MockOrderRepository implements OrderRepository {
 
   Order _findOrder(String id) => _orders[_findOrderIndex(id)];
 
-  /// 让 Mock 延迟也遵守与 Dio 相同的取消语义，生命周期测试无需依赖真实网络。
+  /// 让 Mock 延迟也遵守与真实网络相同的取消语义，生命周期测试无需依赖 Dio。
   Future<void> _simulateLatency(
     Duration duration,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
   ) async {
     if (cancelToken == null) {
       // 没有令牌时退化为普通延迟，便于独立调用 Repository。
       await Future<void>.delayed(duration);
       return;
     }
-    if (cancelToken.isCancelled) throw cancelToken.cancelError!;
+    if (cancelToken.isCancelled) {
+      throw RequestCancellationFailure(cancelToken.reason);
+    }
 
     // 延迟完成与取消事件竞争；谁先完成就决定 Future 结果。
     await Future.any<void>([
       Future<void>.delayed(duration),
-      cancelToken.whenCancel.then<void>((error) => throw error),
+      cancelToken.whenCancelled.then<void>((_) {}),
     ]);
+
+    // Future.any 可能由取消信号完成。显式检查可阻止 Mock 在取消后继续修改数据，
+    // 同时不需要伪造某个具体网络库的异常类型。
+    if (cancelToken.isCancelled) {
+      throw RequestCancellationFailure(cancelToken.reason);
+    }
   }
 }

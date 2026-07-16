@@ -20,8 +20,8 @@
 - [4. 目录怎么读，代码应该放哪里](#4-目录怎么读代码应该放哪里)：掌握 app、core、shared、features 的依赖边界。
 - [5. Riverpod 在本项目里怎样使用](#5-riverpod-在本项目里怎样使用)：Provider、Notifier、异步状态和 ref API。
 - [6. 一次登录请求的完整链路](#6-一次登录请求的完整链路)：从 View 到接口、会话和路由的完整数据流。
-- [7. 请求取消与异步生命周期](#7-请求取消与异步生命周期)：CancelToken、autoDispose 和 ref.mounted。
-- [8. 网络层怎样接真实后端](#8-网络层怎样接真实后端)：响应协议、Token 刷新、重试、弱网监听和公共 Toast。
+- [7. 请求取消与异步生命周期](#7-请求取消与异步生命周期)：取消令牌、autoDispose 和 ref.mounted。
+- [8. 网络层怎样接真实后端](#8-网络层怎样接真实后端)：响应协议、Token 刷新、重试、连接监听和公共 Toast。
 - [9. 新增第一个业务模块](#9-新增第一个业务模块)：按照 MVVM 创建真实业务功能。
 - [10. 初始化成自己的项目](#10-初始化成自己的项目)：使用脚本替换包名、应用名和环境配置。
 - [11. Demo 会不会进入正式包，怎样删除](#11-demo-会不会进入正式包怎样删除)：删除 Demo 和 Starter 的最小步骤。
@@ -248,9 +248,10 @@ lib/
     utils/                  日志、崩溃上报门面
   features/
     auth/                   正式认证和会话模块
+      application/          只在跨 Repository/全局能力编排时使用的应用用例与端口
   shared/
     errors/                 技术失败到安全提示文案的转换
-    localization/           无 BuildContext 场景使用的少量通用文案
+    localization/           ViewModel 消息键与按当前 Locale 解析的类型化消息
     navigation/             底座路径常量
     state/                  页面状态、请求处理、分页处理
     theme/                  主题、间距、圆角
@@ -324,7 +325,7 @@ ref.invalidate(appDatabaseProvider);
 ### autoDispose：没人使用就释放
 
 `loginProvider` 离开登录页后不必保留，因此使用 `autoDispose`。它销毁时调用 Handler 的 `dispose()`，
-未完成 Dio 请求也会被 CancelToken 取消。
+未完成请求也会被底座自己的取消令牌中止。
 
 ### watch、read、listen、select 的区别
 
@@ -344,22 +345,38 @@ ref.invalidate(appDatabaseProvider);
 
 1. `LoginPage` 用 `ref.watch(loginProvider)` 显示 loading 和按钮状态，用 `ref.listen` 消费一次性 Toast。
 2. 点击按钮后用 `ref.read(loginProvider.notifier).login(...)` 发命令。
-3. `LoginNotifier` 先校验表单，再调用 `LoginRepository`。
-4. Repository 根据环境选择 Mock 或 `ApiService`，并透传 CancelToken。
+3. `LoginNotifier` 先校验表单，再调用抽象的 `SignIn` 应用用例。
+4. `SignInUseCase` 调用 `LoginRepository`；Repository 根据环境选择 Mock 或 `ApiService`，并透传
+   `RequestCancellationToken`。
 5. `ApiClient` 加入 baseUrl、Token、requestId、重试和 401 处理。
 6. `ResponseAdapter` 解释 `{code, message, data}`，Repository 把 data 转成 `LoginResponse`。
-7. `LoginNotifier` 生成新 `LoginState`，页面自动刷新。
-8. 页面把成功结果交给 App 级 `AuthNotifier`，后者把 Token 和用户组成一份 `AuthSession` 后原子保存。
-9. `authProvider` 改变后，GoRouter 重新执行守卫并进入项目首页。
+7. `SignInUseCase` 把 Token 和用户组成一份 `AuthSession`，再交给抽象 `SessionActivator`。
+8. App 级 `AuthNotifier` 实现该端口，原子保存会话并发布认证态；用例只返回稳定的 `SignInResult`。
+9. 用例成功后 `LoginNotifier` 才把页面状态改为 success；保存失败则留在表单并发布提示。
+10. `authProvider` 改变后，GoRouter 重新执行守卫并进入项目首页或安全的 `returnTo`。
 
-为什么登录分成 `LoginNotifier` 和 `AuthNotifier`？登录表单离开页面就可以销毁；用户会话要跨页面、跨路由
-长期存在。把两者混在一起，会让全局状态背上验证码、密码错误、按钮 loading 等页面细节。
+这里特意不让 `LoginPage` 读取 `LoginState.token/user` 再调用 `AuthNotifier`。View 只收集输入并发送一条命令；
+“请求成功后怎样保存会话、何时发布已登录状态”属于跨对象业务编排，放在 `SignInUseCase` 中完成。
+`LoginNotifier` 只依赖 `SignIn` 抽象，不直接依赖 `AuthNotifier`、`SessionStore` 或 `ApiService`。
+
+这里的三个对象各自只有一个变化原因：
+
+- `LoginNotifier`：登录表单和页面状态变化时修改。
+- `SignInUseCase`：完整登录业务步骤变化时修改。
+- `AuthNotifier`：全局会话保存、恢复、刷新或退出规则变化时修改。
+
+这不是给每个按钮机械增加 UseCase。只有一个命令需要协调多个 Repository、全局状态或事务顺序时，才增加
+application 用例；普通“加载列表 → 展示结果”仍可由 ViewModel 直接调用单个 Repository。
 
 登录表单的校验失败、接口失败和会话保存失败属于“可立即修改并重试”的操作结果，不会进入整页
-`ErrorView`。`LoginNotifier` 发布安全错误文案和递增的 `feedbackId`，`LoginPage` 使用 `ref.listen`
+`ErrorView`。`LoginNotifier` 发布类型化 `UserMessage` 和递增的 `feedbackId`，`LoginPage` 使用 `ref.listen`
 消费一次性事件，再通过 `AppToast` 显示屏幕中部提示。即使连续两次错误文案相同，递增 id 也能确保
 两次都提示；输入框不会被错误页替换。列表首次加载失败等阻断页面内容的错误，仍使用 `StateView`
 和 `ErrorView`，两类场景不要混用。
+
+固定错误在 ViewModel 中只保存 `UserMessageKey`，不会提前写死中文。View 真正展示时使用当前
+`AppLocalizations` 解析中文或英文；只有后端明确标记可安全展示的动态业务提示才使用
+`UserMessage.text(...)`。不要把 `error.toString()` 包装成动态提示。
 
 会话只写入系统安全存储的 `auth_session_v1`，不会再把 token 和用户分别写进两个存储，因而不会出现
 “token 成功、用户失败”的半登录状态。由旧版升级时，`SecureSessionStore` 会在两份旧数据都完整时迁移一次，
@@ -367,29 +384,33 @@ ref.invalidate(appDatabaseProvider);
 
 ## 7. 请求取消与异步生命周期
 
-`AsyncRequestHandler` 解决的是 Notifier 中反复出现的请求管理：防止重复提交、创建 CancelToken、
-切换 ViewState、统一错误文案。它不是 ViewModel，不拥有业务 State。
+`AsyncRequestHandler` 解决的是 Notifier 中反复出现的请求管理：防止重复提交、创建取消令牌、
+切换 ViewState、统一生成类型化错误消息。它不是 ViewModel，不拥有业务 State。
 
 页面销毁时有两道保护：
 
-- `CancelToken` 尝试停止 Dio 的底层 IO，节省网络和解析工作。
+- `RequestCancellationToken` 发出与网络库无关的取消信号，ApiClient 再把它转换为 Dio 的底层 IO 取消。
 - `ref.mounted` 防止一个已经完成、但所属 Notifier 已销毁的 Future 回写状态。
 
-两者不能互相替代。缓存读取、普通 Future 未必支持 CancelToken，所以每次 `await` 后仍要检查生命周期。
+两者不能互相替代。缓存读取、普通 Future 未必支持取消，所以每次 `await` 后仍要检查生命周期。
+
+`RequestCancellationToken` 位于 `core/network/request_cancellation.dart`，但不 import Dio 或 Flutter。
+Repository、Application、ViewModel 和独立 Demo 都只认识这个稳定类型。Dio `CancelToken` 只允许存在于
+`core/network`，架构测试会阻止它再次渗透到业务层。未来替换 HTTP 客户端时，只改 ApiClient 的适配逻辑。
 
 列表分页使用 `PaginatedListHandler` 时传入 `readState`，让请求结束时读取最新 State，再合并服务器结果。
 这样请求期间到达的 WebSocket 数据或乐观更新不会被旧快照覆盖；下拉刷新还会取消正在执行的加载更多。
 
 ## 8. 网络层怎样接真实后端
 
-Repository 依赖 `ApiService`，不直接操作 Dio 实例、Options、Interceptor 或
-DioException。为了让页面销毁真正中止 IO，接口目前仍公开 `CancelToken` 和进度回调；这是一处有意保留的
-受控耦合，而不是“已经完全与 Dio 无关”：
+Repository 依赖 `ApiService`，不直接操作 Dio 实例、Options、Interceptor 或 DioException。取消令牌与上传/
+下载进度回调也由底座定义为纯 Dart 类型；ApiClient 是唯一把这些抽象翻译成 Dio 类型的适配边界：
 
 ```text
 Repository
   -> ApiService
   -> ApiClient
+  -> RequestCancellationToken 转 Dio CancelToken
   -> Dio Interceptors
   -> ResponseAdapter
   -> ApiResponse / AppFailure
@@ -398,16 +419,18 @@ Repository
 底座已经包含：
 
 - `RequestContext`：单次 Header、requestId、幂等键、重试和重放策略。
+- `RequestCancellationToken`：跨 Repository/UseCase/ViewModel 的稳定取消协议。
 - `ResponseAdapter`：集中解释后端响应外壳。
 - `TokenRefreshCoordinator`：一批并发 401 只刷新一次 Token。
 - `SessionRefresher`：项目注入自己的 refresh token / SSO 实现。
 - `AppFailure`：把稳定错误类型与底层 DioException 分开。
+- `FailureObserver`：只上报协议、存储和未知故障，过滤断网、取消和业务拒绝噪音。
 
 后端直接返回 REST 对象时，将 `responseAdapterProvider` 替换为 `DirectResponseAdapter`。后端字段是
 `status/result/msg` 时，实现自己的 Adapter。不要在每个 Repository 重复判断业务 code。
 
 写请求默认不自动重试。只有后端已经支持幂等键，并且请求提供稳定 `idempotencyKey` 时，才设置
-`allowRetry: true`，否则可能重复创建订单或重复付款。
+`allowRetry: true`。两个条件缺少任意一个，拦截器都不会重试，否则可能重复创建订单或重复付款。
 
 网络重试与 401 后重放是两件事。支付、创建订单等敏感操作应设置
 `replayPolicy: RequestReplayPolicy.never`；上传和下载因为包含文件流，底座强制禁止自动重放。拦截器链只在
@@ -415,23 +438,71 @@ Repository
 请求体、响应体、URL 用户信息、Query 或 Fragment；后端业务 message 默认也不会直接展示，项目确认其已脱敏
 后才把 `EnvelopeResponseAdapter.trustBusinessMessage` 设为 true。
 
-### 全局网络监听与弱网处理
+并发 401 还有一个容易忽略的时序：第二个旧 Token 请求可能在第一次刷新完成后才进入拦截器。底座会比较
+“失败请求携带的 Token”和“认证模块当前 Token”，如果当前已经更新，就直接使用新 Token 重放，不会再刷新
+一次。组合测试真实经过 ApiClient 的完整拦截器链，覆盖并发单次刷新、旧请求重放、敏感请求禁止重放、写请求
+缺少幂等键时不重试，以及带稳定幂等键时重试仍使用同一个 key。
+
+### 异常怎样统一分类和上报
+
+网络、SQLite、安全存储、权限、App 信息和网络状态插件都在各自适配器边界转换为 `AppFailure`。转换时保留
+原始 `cause` 和 `stackTrace`，ViewModel 只看到稳定的 `FailureKind`；`FailureMessageResolver` 再生成安全、
+可本地化的 `UserMessage`，不会把异常文本直接显示给用户。
+
+`FailureObserver` 是统一监控出口：存储损坏、响应协议不匹配和未知平台故障会上报原始根因；断网、超时、
+登录失效、权限拒绝、业务失败和主动取消属于可预期结果，不制造告警噪音。新增异步状态处理器时，应复用这个
+出口，不能自行写一套“是否上报”的判断。
+
+### 普通偏好怎样替换
+
+`LocalStorage` 只留在 Bootstrap 和 SharedPreferences 适配器内部。主题、旧会话迁移和业务代码依赖
+`PreferencesStore`，通过 `preferencesStoreProvider` 获取。测试或品牌壳可直接 override 成内存、加密偏好或
+企业配置实现，不需要初始化插件全局状态。普通偏好不能存 Token；认证会话始终走 `SessionStore` 和系统安全
+存储。`PreferencesStore` 也没有 `clear()`，避免一个模块误删其他模块的数据。
+
+### 全局网络连接监听与临时错误恢复
 
 `networkStatusProvider` 会先读取当前连接类型，再持续监听系统网络变化。`MyApp` 内部的
 `AppNetworkFeedback` 只在以下情况提示：
 
 - 首次查询就是离线，或在线切换到离线：提示检查网络设置。
 - 离线重新变成在线：提示网络连接已恢复。
-- 真实接口发生连接/收发超时，或连续 3 次请求耗时不少于 3 秒：提示当前网络较慢。
-- 弱网后连续 2 次请求快速成功：提示网络状况已恢复。
 
 连接类型不等于互联网一定可用，因此底座不会因为 `connectivity_plus` 报告离线就直接拦截所有请求；
-最终请求结果仍以 Dio 为准。弱网判断也不会启动定时 ping，而是复用真实业务请求样本，避免额外耗电、
-耗流量和探测地址误报。大文件、长轮询等天然慢请求需要在具体项目中排除质量采样。
+最终请求结果仍以 Dio 为准。底座也不会根据接口响应耗时推断“弱网”：慢响应可能来自服务器计算、数据库
+或网关排队，把它提示成用户网络差会误导排查。确实需要网络质量探测的项目，应接入有明确产品指标和独立
+探测目标的实现，不要复用普通业务接口耗时直接下结论。
 
-弱网优化不是“所有请求都自动重试”。底座当前组合使用：连接/收发超时、GET/HEAD 临时错误有限重试、
-1 秒/2 秒退避、写请求幂等白名单、页面销毁 CancelToken、Repository 缓存策略以及全局网络反馈。
+临时网络错误恢复不是“所有请求都自动重试”。底座当前组合使用：连接/收发超时、GET/HEAD 临时错误有限重试、
+1 秒/2 秒退避、写请求幂等白名单、页面销毁请求取消、Repository 缓存策略以及全局网络反馈。
 支付、提交订单等非幂等操作仍然禁止自动重试，这是防止重复业务数据的安全边界。
+
+### 缓存怎样按需选择
+
+底座提供同一个 `CachePolicy<T>` 契约的两种实现：
+
+- `MemoryCachePolicy<T>`：只在当前进程保存，适合几分钟内避免重复请求。
+- `DatabaseCachePolicy<T>`：写入 SQLite `app_cache`，App 重启后仍存在，适合非敏感接口快照和字典。
+
+两者都不会被底座自动注册或自动套在每个接口上。具体业务应在自己的组合 Provider 中决定是否启用：
+
+```dart
+final profileCacheProvider = Provider<CachePolicy<UserProfile>>((ref) {
+  return DatabaseCachePolicy<UserProfile>(
+    database: ref.watch(databaseServiceProvider),
+    cacheKey: 'profile:$tenantId:$userId',
+    duration: const Duration(minutes: 10),
+    encode: (profile) => jsonEncode(profile.toJson()),
+    decode: (value) => UserProfile.fromJson(
+      jsonDecode(value) as Map<String, dynamic>,
+    ),
+  );
+});
+```
+
+示例中的 `tenantId/userId` 不能省略，否则切换租户或账号时可能读取到其他用户缓存。Token、密码等敏感数据
+不能放 `app_cache`，应使用 `SecureStorageService`。需要筛选、关联和事务的核心领域数据应建立独立数据库表；
+`DatabaseCachePolicy` 只是可失效、可重新请求的快照，不是离线业务数据库，也不是通用离线写队列。
 
 公共 Toast 位于 `lib/shared/ui/app_toast.dart`，所有 View 都可以统一调用：
 
@@ -442,7 +513,7 @@ AppToast.showInfo(context, '已复制');
 AppToast.showSuccess(context, '保存成功');
 AppToast.showWarning(
   context,
-  '当前网络较慢',
+  '资料即将过期',
   position: AppToastPosition.top,
 );
 AppToast.showError(
@@ -480,6 +551,7 @@ AppSnackBar.show(
 lib/features/dashboard/
   dashboard.dart
   dashboard_providers.dart
+  application/             可选：只有跨多个边界的业务编排才创建
   model/
   repository/
   view_model/
@@ -490,10 +562,11 @@ lib/features/dashboard/
 
 1. 先写 Model 和 Repository 接口。
 2. 在 Repository 实现中调用 ApiService 或 DatabaseService。
-3. 写不可变 State 和 Notifier。
-4. 页面只 watch State、read Notifier 命令。
-5. 在 `dashboard.dart` 只导出 App 组合层需要的类型。
-6. 创建项目自己的 `AppRouteBundle`，不要把业务页面直接写回通用 `AppRouter`。
+3. 若一个命令需要协调多个 Repository 或全局能力，增加 application 用例并依赖抽象端口；简单 CRUD 跳过。
+4. 写不可变 State 和 Notifier，让 ViewModel 只管理页面状态与命令输入。
+5. 页面只 watch State、read Notifier 命令。
+6. 在 `dashboard.dart` 只导出 App 组合层需要的类型。
+7. 创建项目自己的 `AppRouteBundle`，不要把业务页面直接写回通用 `AppRouter`。
 
 ```dart
 AppRouteBundle createProjectRouteBundle() {
@@ -550,7 +623,10 @@ Future<void> main() {
 - 跨 feature 只能导入目标模块的 `<feature>.dart` 公共入口。
 - feature 之间不能形成循环依赖。
 - Model、Repository、ViewModel、View 不能反向依赖。
+- Application 用例不能依赖 ViewModel/View；View 也不能绕过 ViewModel 直接调用用例。
 - View/ViewModel 不能绕过 Repository 直接依赖 Dio、SQLite 或存储插件。
+- Dio、SQLite、普通/安全存储、连接状态、权限、包信息和图片缓存插件只能出现在各自白名单适配目录；根业务
+  与独立 Demo 都受同一条规则约束。
 
 ## 10. 初始化成自己的项目
 
@@ -644,13 +720,14 @@ flutter test
 | `rootBuilder` | `run_application.dart` | 在启动门外包 ProviderScope/SDK Scope，不能提前读取依赖 LocalStorage 的业务 Provider |
 | `stageTimeout` | `app_bootstrap.dart` | 单个关键启动阶段的上限，不是整个 App 的统一网络超时 |
 | `authenticatedHome` | `app_route_bundle.dart` | 必须与 routes 中真实注册的首页 path 一致 |
-| `allowRetry` | `request_context.dart` | 只声明临时网络错误可重试，不等于允许 401 后重放 |
+| `allowRetry` | `request_context.dart` | 写请求还必须同时提供非空 idempotencyKey；它不等于允许 401 后重放 |
 | `replayPolicy` | `request_context.dart` | 控制认证刷新后的原请求重放，支付、建单等敏感操作应设 never |
-| `trackNetworkQuality` | `request_context.dart` | 长轮询等天然慢请求设 false，避免污染全局弱网判断；不影响请求本身 |
 | `forceNeverReplay` | `api_client.dart` | 内部保护上传/下载流，调用方不能用 context 绕过 |
 | `fromJson` | `api_service.dart` | 解析响应外壳中的 data，不是解析整个 Dio Response |
+| `cacheKey` | `database_cache_policy.dart` | 持久化缓存唯一键；用户数据必须包含 tenantId/userId，防止串号 |
+| `duration` | `database_cache_policy.dart` | 从成功写入开始计算的缓存有效期，必须大于 0 |
 | `readState` | `paginated_handler.dart` | 异步结束时读取最新 State，防止覆盖实时推送或乐观更新 |
-| `clearToken` | `login_view_model.dart` | 显式清空可空字段；`token: null` 本身表示沿用旧值 |
+| `clearFeedbackMessage` | `login_view_model.dart` | 明确清除旧的一次性消息；普通 null 表示沿用旧值 |
 
 简单 Widget 的布局语法和显而易见的常量不会逐行翻译；这类逐字注释会淹没真正需要理解的参数、生命周期、
 并发和安全边界。类、公开方法、重要私有方法、回调、状态字段和可替换接口都应能从注释中读到“为什么这样设计”。
@@ -678,7 +755,8 @@ flutter test
 ### 页面退出后请求还在跑
 
 确认 Provider 使用合适的 `autoDispose`，`build()` 中注册了 Handler 的 `dispose()`，Repository 和
-ApiService 每一层都透传了同一个 CancelToken。
+ApiService 每一层都透传了同一个 `RequestCancellationToken`。不要在 Repository 中重新创建令牌，否则
+页面取消的将不是正在执行的那一次请求。
 
 ### 修改状态后页面不刷新
 
@@ -694,10 +772,12 @@ ApiService 每一层都透传了同一个 CancelToken。
 ```bash
 flutter gen-l10n
 dart run build_runner build
-dart format --output=none --set-exit-if-changed lib test tool
+dart format --output=none --set-exit-if-changed lib test integration_test tool
 flutter analyze
 flutter test --coverage
-dart run tool/check_coverage.dart --minimum 55
+dart run tool/check_coverage.dart --minimum 70
+# 需要已启动的 Android/iOS 模拟器或真机
+flutter test integration_test -d <device-id> --dart-define-from-file=config/local.json
 ```
 
 发布前再执行：
@@ -708,5 +788,8 @@ flutter build ios --release --no-codesign --dart-define-from-file=config/local.j
 ```
 
 `.github/workflows/ci.yml` 会检查根底座与独立 Demo 的格式、生成代码、静态分析和测试；根测试覆盖率不能
-低于 55%，并会构建 Android Debug APK。`android/app/src/main/AndroidManifest.xml` 中的 INTERNET 权限同时
-覆盖 Debug、Profile 和 Release，避免开发包正常、正式包无法请求接口。
+低于 70%，并会构建 Android Debug APK。单独的 Android 模拟器 Job 会运行全部 `integration_test`：既验证
+“受保护地址 → 登录 → 会话保存 → 安全回跳”和“已有会话直接恢复首页”，也真实读写 Android 安全存储和
+SQLite `app_cache` 表，尽早发现平台通道或数据库迁移问题。
+`android/app/src/main/AndroidManifest.xml` 中的 INTERNET 权限同时覆盖 Debug、Profile 和 Release，避免
+开发包正常、正式包无法请求接口。

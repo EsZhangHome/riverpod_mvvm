@@ -1,6 +1,6 @@
 // lib/app/network/app_network_feedback.dart
 //
-// 作用：在 MaterialApp 内部监听全局连接状态和真实请求质量，并给用户轻量提示。
+// 作用：在 MaterialApp 内部监听系统报告的网络连接状态，并给用户轻量提示。
 //
 // 这个组件属于 app 组合层，而不是 core/network：core 只产生与 Flutter 无关的数据；
 // AppNetworkFeedback 才把 Riverpod 状态转换成 Toast。这样网络基础设施不会持有
@@ -9,9 +9,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/network/network_quality_monitor.dart';
 import '../../core/network/network_status_service.dart';
 import '../../core/providers/service_providers.dart';
+import '../../core/errors/failure_observer.dart';
 import '../../l10n/app_localizations.dart';
 import '../../shared/ui/app_toast.dart';
 
@@ -49,22 +49,17 @@ class _AppNetworkFeedbackState extends ConsumerState<AppNetworkFeedback> {
 
   @override
   Widget build(BuildContext context) {
-    // 监听系统网络连接类型。AsyncValue.loading/error 不直接 Toast：插件查询失败不等于
-    // 用户真的断网，真实接口错误仍会按正常错误链路反馈。
+    // 监听系统网络连接类型。error 不直接 Toast：插件查询失败不等于用户真的断网，
+    // 但仍交给统一 FailureObserver 做非致命上报，不能把基础设施故障静默吞掉。
     ref.listen<AsyncValue<NetworkStatus>>(networkStatusProvider, (
       previous,
       next,
     ) {
-      next.whenData(_handleConnectionStatus);
-    });
-
-    // 监听真实接口样本产生的质量跨级事件。StreamProvider 只在事件到来时通知，不会
-    // 因为每一个请求耗时都触发页面重建。
-    ref.listen<AsyncValue<NetworkQualityEvent>>(networkQualityEventsProvider, (
-      previous,
-      next,
-    ) {
-      next.whenData(_handleQualityEvent);
+      next.when(
+        data: _handleConnectionStatus,
+        error: FailureObserver.reportIfNeeded,
+        loading: () {},
+      );
     });
 
     return widget.child;
@@ -99,40 +94,6 @@ class _AppNetworkFeedbackState extends ConsumerState<AppNetworkFeedback> {
         position: AppToastPosition.top,
         overlay: overlay,
       );
-    }
-  }
-
-  void _handleQualityEvent(NetworkQualityEvent event) {
-    if (!mounted) return;
-    final overlay = _rootOverlay;
-    if (overlay == null) return;
-
-    // 系统已经明确报告离线时，离线 Toast 信息更准确，不再叠加“网络较慢”。
-    if (_lastStatus?.isConnected == false) return;
-    final strings = AppLocalizations.of(context);
-
-    switch (event.quality) {
-      case NetworkQuality.poor:
-        AppToast.showWarning(
-          context,
-          strings.networkPoor,
-          position: AppToastPosition.top,
-          displayDuration: const Duration(seconds: 4),
-          overlay: overlay,
-        );
-        break;
-      case NetworkQuality.good:
-        // Monitor 只会在 poor 后恢复时发布 good，初次快速请求不会产生恢复提示。
-        AppToast.showSuccess(
-          context,
-          strings.networkQualityRestored,
-          position: AppToastPosition.top,
-          overlay: overlay,
-        );
-        break;
-      case NetworkQuality.unknown:
-        // unknown 只是样本不足，不属于需要打扰用户的状态。
-        break;
     }
   }
 

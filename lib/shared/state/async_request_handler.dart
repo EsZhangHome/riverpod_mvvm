@@ -35,18 +35,17 @@
 // }
 // ```
 
-import 'package:dio/dio.dart';
-
-import '../../core/network/api_exception.dart';
 import '../../core/errors/app_failure.dart';
-import '../../core/utils/crash_reporter.dart';
+import '../../core/errors/failure_observer.dart';
+import '../../core/network/request_cancellation.dart';
 import '../errors/failure_message_resolver.dart';
+import '../localization/user_message.dart';
 
 /// 异步请求处理器，封装了 ViewModel 常用的请求管理逻辑。
 ///
 /// 提供的能力：
 /// 1. 请求互斥：同一时间只允许一个请求（_isRequesting），重复调用直接忽略
-/// 2. CancelToken 管理：dispose 时取消当前 Handler 发出的请求
+/// 2. 取消令牌管理：dispose 时取消当前 Handler 发出的请求
 /// 3. 状态切换回调：通过 onLoading/onSuccess/onEmpty/onError 委托给 Notifier
 ///
 /// 每个 ViewModel Notifier 在 build() 中创建一个实例，
@@ -71,9 +70,9 @@ class AsyncRequestHandler {
 
   /// 取消令牌，生命周期与 Notifier 绑定。
   ///
-  /// 使用方式：Repository 调用 Dio 时透传此 token。
-  /// dispose 时自动 cancel，Dio 会以 cancel 类型的 DioException 结束请求。
-  final CancelToken cancelToken = CancelToken();
+  /// 使用方式：Repository 继续把它传给 ApiService，不需要知道底层是否使用 Dio。
+  /// dispose 时自动 cancel；ApiClient 会把信号适配为具体网络库的 IO 取消操作。
+  final RequestCancellationToken cancelToken = RequestCancellationToken();
 
   // ==================== 核心方法 ====================
 
@@ -84,7 +83,7 @@ class AsyncRequestHandler {
   /// [onLoading]：请求开始时调用，通常设置 state.viewState = loading
   /// [onSuccess]：请求成功且有数据时调用
   /// [onEmpty]：请求成功但数据为空时调用；只有同时传 [isEmpty] 才可能触发
-  /// [onError]：请求失败时调用，message 已转换为对用户友好的文案
+  /// [onError]：请求失败时调用，message 是安全且等待 View 本地化的类型化消息
   ///
   /// [isEmpty]：判断数据是否为空的回调，如 (data) => data.isEmpty
   ///
@@ -100,7 +99,7 @@ class AsyncRequestHandler {
   Future<T?> execute<T>({
     required Future<T> Function() request,
     required void Function() onLoading,
-    required void Function(String message) onError,
+    required void Function(UserMessage message) onError,
     required void Function() onSuccess,
     void Function()? onEmpty,
     bool Function(T data)? isEmpty,
@@ -110,7 +109,7 @@ class AsyncRequestHandler {
       return null;
     }
 
-    // ---- 步骤 2：CancelToken 检查 ----
+    // ---- 步骤 2：取消令牌检查 ----
     if (cancelToken.isCancelled) {
       return null;
     }
@@ -139,14 +138,12 @@ class AsyncRequestHandler {
       // ---- 步骤 6：错误处理 ----
       if (_isDisposed ||
           cancelToken.isCancelled ||
-          (error is ApiException && error.isCancelled)) {
+          (error is AppFailure && error.isCancellation)) {
         return null;
       }
-      // AppFailure 是已经归类的可预期失败；其他异常更可能是解析错误或编程缺陷，
-      // 页面仍显示安全文案，但必须进入监控，不能被通用 Handler 静默吞掉。
-      if (error is! AppFailure) {
-        CrashReporter.report(error, stackTrace);
-      }
+      // FailureObserver 会忽略网络/业务等预期失败，同时上报协议、存储、未知异常的
+      // 原始 cause/stack。页面无论是否上报都只得到安全类型化文案。
+      FailureObserver.reportIfNeeded(error, stackTrace);
       onError(FailureMessageResolver.resolve(error));
       return null;
     } finally {

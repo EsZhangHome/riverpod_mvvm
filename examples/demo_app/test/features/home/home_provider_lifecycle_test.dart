@@ -1,26 +1,25 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import 'package:riverpod_mvvm_demo/features/home/home_providers.dart';
 import 'package:riverpod_mvvm_demo/features/home/model/home_banner.dart';
 import 'package:riverpod_mvvm_demo/features/home/repository/home_repository.dart';
 import 'package:riverpod_mvvm_demo/features/home/view_model/home_view_model.dart';
 
 class _PendingHomeRepository implements HomeRepository {
-  // 测试通过 Completer 精确等待 Repository 真正收到 CancelToken。
-  final requestStarted = Completer<CancelToken>();
+  // 测试通过 Completer 精确等待 Repository 真正收到取消令牌。
+  final requestStarted = Completer<RequestCancellationToken>();
 
   @override
-  Future<List<HomeBanner>> fetchBanners({CancelToken? cancelToken}) async {
+  Future<List<HomeBanner>> fetchBanners({
+    RequestCancellationToken? cancelToken,
+  }) async {
     // 记录令牌后一直等待取消；若生产代码没取消，测试会无法完成。
     requestStarted.complete(cancelToken);
-    await cancelToken!.whenCancel;
-    throw DioException.requestCancelled(
-      requestOptions: RequestOptions(path: '/home/banners'),
-      reason: 'provider disposed',
-    );
+    await cancelToken!.whenCancelled;
+    throw RequestCancellationFailure(cancelToken.reason);
   }
 }
 

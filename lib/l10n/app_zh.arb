@@ -8,8 +8,25 @@
     }
   },
   "retry": "重试",
+  "login": "登录",
+  "account": "手机号/邮箱",
+  "password": "密码",
+  "enterAccount": "请输入手机号或邮箱",
+  "enterPassword": "请输入密码",
+  "backHome": "返回首页",
+  "noData": "暂无数据",
+  "pageNotFound": "页面不存在",
+  "requestTimeout": "请求超时，请稍后重试",
+  "requestCanceled": "请求已取消",
+  "networkError": "网络连接异常",
+  "unknownError": "未知错误，请稍后重试",
+  "serverError": "服务器异常，请稍后重试",
+  "requestFailed": "请求失败，请稍后重试",
+  "sessionExpired": "登录状态已失效，请重新登录",
+  "permissionDenied": "暂无权限执行此操作",
+  "validationFailed": "提交内容校验失败",
+  "storageError": "本地数据处理失败",
+  "protocolError": "服务响应格式异常",
   "networkDisconnected": "当前网络不可用，请检查网络设置",
-  "networkRestored": "网络连接已恢复",
-  "networkPoor": "当前网络较慢，正在尝试重新连接",
-  "networkQualityRestored": "网络状况已恢复"
+  "networkRestored": "网络连接已恢复"
 }

@@ -5,19 +5,18 @@
 // 页面执行步骤：
 // 1. watch loginProvider 渲染表单状态；
 // 2. 点击登录时 read Notifier 并发送账号密码；
-// 3. 成功后读取 LoginState，把 token/user 写入 App 级 authProvider；
-// 4. AuthNotifier 持久化并更新登录态；GoRouter 守卫自动进入当前业务首页。
+// 3. LoginNotifier 调用 SignIn 用例，由用例协调接口与全局会话端口；
+// 4. GoRouter 守卫观察 AuthState，自动进入当前业务首页。
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/env_config.dart';
 import '../../../shared/state/view_state.dart';
-import '../../../shared/localization/app_strings.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../shared/theme/app_spacing.dart';
 import '../../../shared/ui/app_toast.dart';
 import '../../../shared/ui/state_view.dart';
-import '../view_model/auth_view_model.dart';
 import '../view_model/login_view_model.dart';
 
 /// 登录模块的 View，只负责收集输入、展示 [LoginState] 和发送用户操作。
@@ -65,19 +64,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     // - 不使用 fireImmediately，页面重建或重新挂载时不会重复播放旧提示。
     ref.listen(
       loginProvider.select(
-        (state) => (id: state.feedbackId, message: state.errorMessage),
+        (state) => (id: state.feedbackId, message: state.feedbackMessage),
       ),
       (previous, next) {
         if (next.id == 0 || next.id == previous?.id) return;
-        AppToast.showError(context, next.message);
+        final message = next.message;
+        if (message == null) return;
+        AppToast.showError(
+          context,
+          message.resolve(AppLocalizations.of(context)),
+        );
       },
     );
 
-    // watch 建立订阅：ViewState 或错误文案变化时页面自动重建。
+    // watch 建立订阅：ViewState 或类型化反馈消息变化时页面自动重建。
     final state = ref.watch(loginProvider);
+    final strings = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text(AppStrings.login)),
+      appBar: AppBar(title: Text(strings.login)),
       body: StateView(
         state: state.viewState,
         // overlay 保留表单内容，只在提交期间盖一层 loading，避免界面闪烁。
@@ -97,29 +102,32 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               ),
               const SizedBox(height: AppSpacing.xxl),
               TextField(
+                key: const ValueKey('login.account'),
                 controller: _accountController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: AppStrings.account,
+                decoration: InputDecoration(
+                  labelText: strings.account,
                   border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
               TextField(
+                key: const ValueKey('login.password'),
                 controller: _passwordController,
                 obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: AppStrings.password,
+                decoration: InputDecoration(
+                  labelText: strings.password,
                   border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
               ElevatedButton(
+                key: const ValueKey('login.submit'),
                 // loading 时禁用按钮，UI 层先阻止连续点击；Handler 还有第二层防重。
                 onPressed: state.viewState == ViewState.loading
                     ? null
                     : () => _login(),
-                child: const Text(AppStrings.login),
+                child: Text(strings.login),
               ),
             ],
           ),
@@ -129,34 +137,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _login() async {
-    // 步骤 1：read 只发送一次登录命令，不建立额外 Widget 订阅。
-    final notifier = ref.read(loginProvider.notifier);
-    final success = await notifier.login(
-      _accountController.text,
-      _passwordController.text,
-    );
-
-    // 步骤 2：异步返回后先检查 Widget 生命周期和业务结果。
-    if (!mounted || !success) return;
-
-    // 步骤 3：读取刚写入的成功结果；缺少 token/user 时不创建残缺会话。
-    final loginState = ref.read(loginProvider);
-    final token = loginState.token;
-    final user = loginState.user;
-    if (token == null || user == null) return;
-
-    // 步骤 4：交给 App 级 AuthNotifier；先安全保存完整会话，成功后再更新内存状态。
-    final persisted = await ref
-        .read(authProvider.notifier)
-        .loginSuccess(token, user);
-    if (!mounted) return;
-    if (!persisted) {
-      ref.read(loginProvider.notifier).showSessionStorageError();
-    }
-
-    // 这里故意不写 `context.go('/main/home')`：登录页属于通用 auth 模块，
-    // 不应该知道任何项目的具体首页。AuthState 更新后，MyApp 的
-    // App 根部的 ref.listenManual 会通知 GoRouter 重新执行守卫，再由当前登录页
-    // returnTo 或入口路由包的 authenticatedHome 决定最终目标。
+    // View 只负责收集输入并发送一次命令。账号校验、接口请求、SessionStore 持久化、
+    // authProvider 更新都属于登录用例，由 LoginNotifier 完成。这里既不读取 token/user，
+    // 也不调用 AuthNotifier，因此页面不会成为两个 ViewModel 之间的业务协调器。
+    await ref
+        .read(loginProvider.notifier)
+        .login(_accountController.text, _passwordController.text);
   }
 }

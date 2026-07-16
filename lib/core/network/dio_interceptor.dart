@@ -6,9 +6,8 @@
 // 1. RequestMetadataInterceptor → 补齐 requestId
 // 2. TokenInterceptor           → 请求前自动注入 Authorization header
 // 3. AppLogInterceptor          → 请求/响应/错误时记录脱敏日志
-// 4. NetworkQualityInterceptor → 用真实请求样本判断弱网，不额外发送探测请求
-// 5. UnauthorizedInterceptor   → 捕获 401，协调刷新、重放或通知会话失效
-// 6. RetryInterceptor          → 超时/连接异常时按安全规则重试
+// 4. UnauthorizedInterceptor   → 捕获 401，协调刷新、重放或通知会话失效
+// 5. RetryInterceptor          → 超时/连接异常时按安全规则重试
 //
 // 设计要点：
 // - 拦截器之间通过责任链模式传递，每个拦截器处理完后调用 handler.next()
@@ -23,7 +22,6 @@ import 'package:dio/dio.dart';
 import '../config/env_config.dart';
 import '../performance/performance_reporter.dart';
 import '../utils/logger.dart';
-import 'network_quality_monitor.dart';
 import 'token_refresh_coordinator.dart';
 
 // ==================== 0. 请求追踪 ====================
@@ -170,74 +168,7 @@ class AppLogInterceptor extends Interceptor {
   }
 }
 
-// ==================== 3. 网络质量采样 ====================
-
-/// 把真实接口耗时和明确的传输失败交给 [NetworkQualityMonitor]。
-///
-/// 本拦截器只采样，不展示 Toast，也不读取 Riverpod。这样网络层仍然不知道 Widget，
-/// UI 层可通过 Provider 监听 Monitor 事件后决定是否提示用户。
-class NetworkQualityInterceptor extends Interceptor {
-  /// 创建质量采样拦截器；[monitor] 与 ApiClient 处于同一个 ProviderContainer。
-  NetworkQualityInterceptor({required this.monitor});
-
-  /// 接收样本并维护弱网状态的纯 Dart 服务。
-  final NetworkQualityMonitor monitor;
-
-  @override
-  void onResponse(
-    Response<dynamic> response,
-    ResponseInterceptorHandler handler,
-  ) {
-    if (response.requestOptions.extra['networkQualityExcluded'] == true) {
-      handler.next(response);
-      return;
-    }
-    final elapsed = _elapsedSinceRequest(response.requestOptions);
-    if (elapsed != null) monitor.recordSuccess(elapsed);
-    handler.next(response);
-  }
-
-  @override
-  void onError(DioException err, ErrorInterceptorHandler handler) {
-    if (err.requestOptions.extra['networkQualityExcluded'] == true) {
-      handler.next(err);
-      return;
-    }
-    // 采用白名单，只把网络传输阶段的失败算作弱网。用户取消、业务响应、证书问题
-    // 或未知编程异常不会触发全局网络提示。
-    switch (err.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.sendTimeout:
-      case DioExceptionType.receiveTimeout:
-      case DioExceptionType.connectionError:
-        monitor.recordTransportFailure();
-        break;
-      case DioExceptionType.badCertificate:
-      case DioExceptionType.badResponse:
-      case DioExceptionType.cancel:
-      case DioExceptionType.unknown:
-        break;
-      // Dio 新版本可能增加 transformTimeout 等类型。弱网判断必须采用明确白名单，
-      // 未知的新类型默认忽略，不能在升级依赖后自动变成“网络差”误报。
-      // 根项目当前锁定版本已穷举全部枚举，因此分析器会认为 default 暂时不可达；
-      // 独立 Demo 可解析到更新的兼容版本，这个分支会负责向前兼容。
-      // ignore: unreachable_switch_default
-      default:
-        break;
-    }
-    handler.next(err);
-  }
-
-  Duration? _elapsedSinceRequest(RequestOptions request) {
-    final started = request.extra['requestStartedMicros'];
-    if (started is! int) return null;
-    final elapsedMicros = developer.Timeline.now - started;
-    if (elapsedMicros < 0) return null;
-    return Duration(microseconds: elapsedMicros);
-  }
-}
-
-// ==================== 4. 401 会话失效去重守卫 ====================
+// ==================== 3. 401 会话失效去重守卫 ====================
 
 /// 401 并发保护器。
 ///
@@ -312,12 +243,15 @@ class UnauthorizedInterceptor extends Interceptor {
   /// 参数说明：
   /// - [guard]：并发会话失效去重器，确保一批 401 只清理一次会话；
   /// - [dio]：用于通过 `dio.fetch` 重放原请求的同一个 Dio 实例；
+  /// - [currentAccessToken]：同步读取认证模块当前 token，用来识别“旧 token 请求的
+  ///   401 晚于另一请求刷新完成才进入拦截器”的竞态，避免重复刷新；
   /// - [refreshAccessToken]：可选刷新函数。成功返回新 token，不支持刷新时传 null；
   /// - [refreshCoordinator]：合并并发刷新操作的协调器。生产通常不传，测试可以注入
   ///   独立实例验证并发行为。
   UnauthorizedInterceptor({
     required this.guard,
     required this.dio,
+    required this.currentAccessToken,
     this.refreshAccessToken,
     TokenRefreshCoordinator? refreshCoordinator,
   }) : refreshCoordinator = refreshCoordinator ?? TokenRefreshCoordinator();
@@ -328,6 +262,9 @@ class UnauthorizedInterceptor extends Interceptor {
   /// 发送原请求重放的客户端。必须与触发当前拦截器的 Dio 为同一实例，才能保留
   /// baseUrl、适配器、超时和完整拦截器链。
   final Dio dio;
+
+  /// 当前会话访问令牌的只读回调。它不访问磁盘，只读取认证模块的内存状态。
+  final String? Function() currentAccessToken;
 
   /// 刷新访问令牌的可选回调；null 表示直接把 401 视为会话失效。
   final RefreshAccessToken? refreshAccessToken;
@@ -346,7 +283,43 @@ class UnauthorizedInterceptor extends Interceptor {
     }
 
     final request = err.requestOptions;
-    if (request.extra['authRetried'] == true || refreshAccessToken == null) {
+    if (request.extra['authRetried'] == true) {
+      await guard.handle();
+      handler.next(err);
+      return;
+    }
+
+    // 两个请求可能几乎同时返回 401，但第二个响应进入本拦截器时，第一个响应已经
+    // 完成了刷新。此时第二个请求携带的仍是旧 token，不能再刷新一次；直接使用认证
+    // 模块中已经更新的新 token 重放即可。这里比较完整 Bearer Header，避免仅凭
+    // “当前 token 非空”把真正过期的请求误判成已刷新。
+    final latestToken = currentAccessToken();
+    final latestAuthorization = latestToken?.isNotEmpty == true
+        ? 'Bearer $latestToken'
+        : null;
+    final requestAuthorization = request.headers['Authorization']?.toString();
+    if (latestAuthorization != null &&
+        requestAuthorization != latestAuthorization) {
+      if (request.extra['replayDisabled'] == true) {
+        handler.next(err);
+        return;
+      }
+      try {
+        await _replay(request, latestAuthorization, handler);
+      } on Object catch (error) {
+        // 新 token 重放仍失败时交给会话失效链路。Guard 会合并并发回调；日志只记录
+        // 类型，不输出可能携带 Header/响应体的 DioException 内容。
+        AppLogger.warning(
+          'Request replay with refreshed token failed',
+          context: {'errorType': error.runtimeType.toString()},
+        );
+        await guard.handle();
+        handler.next(err);
+      }
+      return;
+    }
+
+    if (refreshAccessToken == null) {
       await guard.handle();
       handler.next(err);
       return;
@@ -366,10 +339,7 @@ class UnauthorizedInterceptor extends Interceptor {
         return;
       }
 
-      request.extra['authRetried'] = true;
-      request.headers['Authorization'] = 'Bearer $token';
-      final response = await dio.fetch<dynamic>(request);
-      handler.resolve(response);
+      await _replay(request, 'Bearer $token', handler);
     } on Object catch (error) {
       // 刷新异常可能携带 Header、响应体等隐私数据，只记录异常类型用于聚合。
       AppLogger.warning(
@@ -380,13 +350,28 @@ class UnauthorizedInterceptor extends Interceptor {
       handler.next(err);
     }
   }
+
+  /// 使用明确的 Authorization Header 重放一次原请求。
+  ///
+  /// `authRetried` 在发送前写入，确保重放仍返回 401 时不会形成无限循环。调用本方法
+  /// 前必须已经检查 replayDisabled；上传、下载、支付等不可重放请求不能进入这里。
+  Future<void> _replay(
+    RequestOptions request,
+    String authorization,
+    ErrorInterceptorHandler handler,
+  ) async {
+    request.extra['authRetried'] = true;
+    request.headers['Authorization'] = authorization;
+    final response = await dio.fetch<dynamic>(request);
+    handler.resolve(response);
+  }
 }
 
 // ==================== 6. 重试拦截器 ====================
 
 /// 对满足幂等条件的超时或连接异常执行有限重试。
 ///
-/// 适用场景：弱网环境下 GET/HEAD 偶发超时或连接失败；其他方法只有在调用方
+/// 适用场景：GET/HEAD 遇到偶发连接超时或连接失败；其他方法只有在调用方
 /// 确认服务端支持幂等并设置 `RequestContext.allowRetry` 后才允许重试。
 ///
 /// 不适用场景：
@@ -492,9 +477,20 @@ class RetryInterceptor extends Interceptor {
   bool _shouldRetry(DioException err) {
     if (err.requestOptions.extra['replayDisabled'] == true) return false;
     const retryableMethods = {'GET', 'HEAD'};
+    final isReadRequest = retryableMethods.contains(
+      err.requestOptions.method.toUpperCase(),
+    );
     final explicitlyRetryable = err.requestOptions.extra['allowRetry'] == true;
-    if (!retryableMethods.contains(err.requestOptions.method.toUpperCase()) &&
-        !explicitlyRetryable) {
+    final hasIdempotencyKey = err.requestOptions.headers.entries.any((entry) {
+      return entry.key.toLowerCase() == 'idempotency-key' &&
+          entry.value?.toString().trim().isNotEmpty == true;
+    });
+
+    // allowRetry 只是调用方的意愿，Idempotency-Key 才是服务端识别同一次业务操作的
+    // 依据。写请求必须同时具备两者：只设置开关会有重复下单/重复提交风险；只设置
+    // 幂等键但未显式开启，则尊重调用方“不自动重试”的默认选择。
+    final isSafeWriteRequest = explicitlyRetryable && hasIdempotencyKey;
+    if (!isReadRequest && !isSafeWriteRequest) {
       return false;
     }
 

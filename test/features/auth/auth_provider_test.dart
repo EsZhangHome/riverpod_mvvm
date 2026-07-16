@@ -69,7 +69,7 @@ void main() {
   });
 
   test(
-    'loginSuccess persists session before publishing logged-in state',
+    'activateSession persists session before publishing logged-in state',
     () async {
       final store = _MemorySessionStore();
       final container = _containerWith(store);
@@ -83,7 +83,7 @@ void main() {
 
       final persisted = await container
           .read(authProvider.notifier)
-          .loginSuccess('new_token', user);
+          .activateSession(AuthSession(token: 'new_token', user: user));
 
       expect(persisted, isTrue);
       expect(store.session?.token, 'new_token');
@@ -101,7 +101,7 @@ void main() {
 
     final persisted = await container
         .read(authProvider.notifier)
-        .loginSuccess('new_token', user);
+        .activateSession(AuthSession(token: 'new_token', user: user));
 
     expect(persisted, isFalse);
     expect(container.read(authProvider).status, AuthStatus.unauthenticated);

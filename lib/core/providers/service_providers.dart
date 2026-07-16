@@ -31,10 +31,10 @@ import '../database/sqlite_database_service.dart';
 import '../network/api_client.dart';
 import '../network/api_service.dart';
 import '../network/network_status_service.dart';
-import '../network/network_quality_monitor.dart';
 import '../network/response_adapter.dart';
 import '../permission/permission_service.dart';
 import '../storage/secure_storage_service.dart';
+import '../storage/preferences_store.dart';
 
 /// 后端外层响应协议适配器。
 ///
@@ -51,10 +51,7 @@ final responseAdapterProvider = Provider<ResponseAdapter>(
 /// ref.onDispose 关闭 Dio。测试可 override 成注入 MockAdapter 的 ApiClient。
 /// 业务 Repository 不应直接读取本 Provider，应依赖下面的 apiServiceProvider。
 final apiClientProvider = Provider<ApiClient>((ref) {
-  final client = ApiClient(
-    responseAdapter: ref.watch(responseAdapterProvider),
-    networkQualityMonitor: ref.watch(networkQualityMonitorProvider),
-  );
+  final client = ApiClient(responseAdapter: ref.watch(responseAdapterProvider));
   ref.onDispose(client.close);
   return client;
 });
@@ -118,24 +115,6 @@ final networkStatusProvider = StreamProvider<NetworkStatus>((ref) async* {
   }
 });
 
-/// 真实接口网络质量监控器。
-///
-/// ApiClient 和 App 根监听读取的是同一个实例：前者写入请求样本，后者只监听事件。
-/// 具体项目可 override 本 Provider 调整慢请求阈值，而不修改 ApiClient。
-final networkQualityMonitorProvider = Provider<NetworkQualityMonitor>((ref) {
-  final monitor = NetworkQualityMonitor();
-  ref.onDispose(monitor.dispose);
-  return monitor;
-});
-
-/// 把纯 Dart Monitor 的广播流转换成 Riverpod AsyncValue。
-///
-/// 这里只发送质量跨级事件，不持续保存每次请求耗时，避免网络请求导致 Widget 高频
-/// 重建。详细耗时仍由 AppPerformance 负责记录和上报。
-final networkQualityEventsProvider = StreamProvider<NetworkQualityEvent>((ref) {
-  return ref.watch(networkQualityMonitorProvider).events;
-});
-
 /// 权限服务（在当前 ProviderContainer 内共享）。
 ///
 /// 统一封装 permission_handler。
@@ -158,4 +137,13 @@ final appInfoServiceProvider = Provider<AppInfoService>(
 /// 通过 SessionStore 封装完整会话语义；普通业务不要直接散落安全存储 key。
 final secureStorageServiceProvider = Provider<SecureStorageService>(
   (ref) => FlutterSecureStorageService(),
+);
+
+/// 普通非敏感偏好存储（在当前 ProviderContainer 内可替换）。
+///
+/// 默认适配 Bootstrap 已准备的 LocalStorage，因此首次读取仍是同步的，不会造成主题
+/// 首帧闪烁。业务、主题和旧会话迁移只依赖 PreferencesStore；测试可以 override 为
+/// 内存实现，不需要初始化 SharedPreferences 的全局 Mock。
+final preferencesStoreProvider = Provider<PreferencesStore>(
+  (ref) => const BootstrappedPreferencesStore(),
 );

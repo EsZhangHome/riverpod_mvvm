@@ -37,6 +37,7 @@
 import 'package:flutter/material.dart';
 
 import '../state/view_state.dart';
+import '../localization/user_message.dart';
 import 'state_view.dart';
 
 /// 页面正常内容构建函数类型。
@@ -70,7 +71,7 @@ class PageShell extends StatelessWidget {
     super.key,
     required this.viewState,
     required this.builder,
-    this.errorMessage = '',
+    this.errorMessage,
     this.onRetry,
     this.loadingStyle = LoadingStyle.replace,
   });
@@ -82,7 +83,7 @@ class PageShell extends StatelessWidget {
   final PageContentBuilder builder;
 
   /// 错误提示文案，仅 error 状态使用。
-  final String errorMessage;
+  final UserMessage? errorMessage;
 
   /// 重试回调（ErrorView 点击重试按钮时调用）。
   final VoidCallback? onRetry;

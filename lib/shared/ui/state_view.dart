@@ -26,6 +26,7 @@
 import 'package:flutter/material.dart';
 
 import '../state/view_state.dart';
+import '../localization/user_message.dart';
 import 'empty_view.dart';
 import 'error_view.dart';
 import 'loading_view.dart';
@@ -60,7 +61,7 @@ class StateView extends StatelessWidget {
     super.key,
     required this.state,
     required this.child,
-    this.errorMessage = '',
+    this.errorMessage,
     this.onRetry,
     this.loadingStyle = LoadingStyle.replace,
   });
@@ -72,7 +73,7 @@ class StateView extends StatelessWidget {
   final Widget child;
 
   /// 错误提示文案，仅在 error 状态下展示。
-  final String errorMessage;
+  final UserMessage? errorMessage;
 
   /// 重试回调，为 null 时 ErrorView 不显示重试按钮。
   final VoidCallback? onRetry;

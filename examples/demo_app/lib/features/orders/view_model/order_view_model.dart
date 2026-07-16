@@ -13,11 +13,12 @@
 
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../localization/demo_strings.dart';
 import 'package:riverpod_mvvm/core/network/api_exception.dart';
+import 'package:riverpod_mvvm/core/errors/app_failure.dart';
+import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import 'package:riverpod_mvvm/core/utils/logger.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
 import '../model/order.dart';
@@ -147,7 +148,7 @@ class OrderFeedState {
 
 class OrderFeedNotifier extends AsyncNotifier<OrderFeedState> {
   // 同一个列表 Provider 可能同时执行分页、创建和取消，因此跟踪全部请求令牌。
-  final Set<CancelToken> _activeRequestTokens = {};
+  final Set<RequestCancellationToken> _activeRequestTokens = {};
 
   // 命令方法用 read 获取当前 Repository，不额外建立重复依赖。
   OrderRepository get _repository => ref.read(orderRepositoryProvider);
@@ -403,14 +404,14 @@ class OrderFeedNotifier extends AsyncNotifier<OrderFeedState> {
     }
   }
 
-  CancelToken _startRequest() {
+  RequestCancellationToken _startRequest() {
     // 每个并发命令有独立令牌，完成后只移除自己的令牌。
-    final cancelToken = CancelToken();
+    final cancelToken = RequestCancellationToken();
     _activeRequestTokens.add(cancelToken);
     return cancelToken;
   }
 
-  void _finishRequest(CancelToken cancelToken) {
+  void _finishRequest(RequestCancellationToken cancelToken) {
     // 已完成请求不再需要 dispose 阶段重复取消。
     _activeRequestTokens.remove(cancelToken);
   }
@@ -439,8 +440,7 @@ class OrderFeedNotifier extends AsyncNotifier<OrderFeedState> {
 }
 
 bool _isCancellation(Object error) {
-  return (error is DioException && CancelToken.isCancel(error)) ||
-      (error is ApiException && error.isCancelled);
+  return error is AppFailure && error.isCancellation;
 }
 
 /// 只重试可能自行恢复的网络错误；参数、权限和业务异常直接交给 UI。
@@ -452,20 +452,9 @@ bool _isTransientOrderError(Object error) {
         error.code == ApiException.serverError ||
         (error.code >= 500 && error.code < 600);
   }
-  if (error is! DioException || CancelToken.isCancel(error)) return false;
-  return switch (error.type) {
-    DioExceptionType.connectionTimeout ||
-    DioExceptionType.sendTimeout ||
-    DioExceptionType.receiveTimeout ||
-    DioExceptionType.connectionError => true,
-    DioExceptionType.badResponse => (error.response?.statusCode ?? 0) >= 500,
-    DioExceptionType.cancel ||
-    DioExceptionType.badCertificate ||
-    DioExceptionType.unknown => false,
-    // Dio 新版本可能增加异常枚举。教学代码对未知类型采用保守策略：不自动
-    // 重试，避免未来新增的证书、转换类错误被错误地重复发送。
-    _ => false,
-  };
+  // ApiClient 已把具体网络库异常收敛成稳定 ApiException。未知错误采用保守策略：
+  // 不自动重试，避免解析、证书或编程错误被重复执行。
+  return false;
 }
 
 // 根 Tab 要跨 Tab 保留已加载分页，所以不使用 autoDispose。
@@ -502,14 +491,14 @@ final orderDetailCacheDurationProvider = Provider<Duration>((ref) {
 });
 
 /// 每个订单 id 都有独立缓存；成功后，最后一个监听离开再保留指定 TTL。
-/// 未完成的请求不 keepAlive，弹窗关闭时会立即通过 CancelToken 中止。
+/// 未完成的请求不 keepAlive，弹窗关闭时会立即通过底座取消令牌中止。
 final orderDetailProvider = FutureProvider.autoDispose.family<Order, String>((
   ref,
   id,
 ) async {
   final repository = ref.watch(orderRepositoryProvider);
   final cacheDuration = ref.watch(orderDetailCacheDurationProvider);
-  final cancelToken = CancelToken();
+  final cancelToken = RequestCancellationToken();
   void Function()? closeCache;
   Timer? cacheTimer;
   var hasActiveListener = true;

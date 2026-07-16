@@ -4,7 +4,7 @@ import 'dart:io';
 
 /// 读取 lcov 报告并执行覆盖率门禁。
 ///
-/// [arguments] 支持 `--minimum 55` 或 `--minimum=55`；不传时阈值为 55%。脚本只读
+/// [arguments] 支持 `--minimum 70` 或 `--minimum=70`；不传时阈值为 70%。脚本只读
 /// coverage/lcov.info，不会运行测试。报告不存在返回 64，没有手写行返回 65，低于
 /// 阈值返回 1，满足要求保持 0。
 void main(List<String> arguments) {
@@ -58,7 +58,7 @@ double _minimumFrom(List<String> arguments) {
       return _parseMinimum(arguments[index + 1]);
     }
   }
-  return 55;
+  return 70;
 }
 
 /// 把 [value] 解析为 0～100 的百分比；无效值打印错误并立即退出。

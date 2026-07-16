@@ -9,6 +9,9 @@
 
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../errors/app_failure.dart';
+import '../errors/platform_service_exception.dart';
+
 /// App 基础信息。
 class AppInfo {
   /// 创建一份不可变的应用信息快照。
@@ -46,7 +49,8 @@ abstract class AppInfoService {
   ///
   /// 首次调用可能通过平台通道读取 Android/iOS 元数据，因此返回 Future。实现可以
   /// 缓存结果；应用版本在一次进程运行期间不会变化，业务无需频繁强制刷新。
-  /// 平台插件异常会继续抛给调用方，由 FutureProvider/Repository 决定页面状态。
+  /// 默认适配器会把平台插件异常转换为 PlatformServiceException，由状态层决定展示，
+  /// FailureObserver 决定是否上报；接口的 Fake 也应遵循相同语义。
   Future<AppInfo> getAppInfo();
 }
 
@@ -62,14 +66,25 @@ class PackageInfoAppInfoService implements AppInfoService {
       return cachedAppInfo;
     }
 
-    final packageInfo = await PackageInfo.fromPlatform();
-    final appInfo = AppInfo(
-      appName: packageInfo.appName,
-      packageName: packageInfo.packageName,
-      version: packageInfo.version,
-      buildNumber: packageInfo.buildNumber,
-    );
-    _cachedAppInfo = appInfo;
-    return appInfo;
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      final appInfo = AppInfo(
+        appName: packageInfo.appName,
+        packageName: packageInfo.packageName,
+        version: packageInfo.version,
+        buildNumber: packageInfo.buildNumber,
+      );
+      _cachedAppInfo = appInfo;
+      return appInfo;
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error, stackTrace) {
+      throw PlatformServiceException(
+        service: 'package_info',
+        operation: 'reading application metadata',
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 }

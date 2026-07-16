@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:riverpod_mvvm/shared/state/async_request_handler.dart';
 import 'package:riverpod_mvvm/shared/state/view_state.dart';
+import 'package:riverpod_mvvm/shared/localization/user_message.dart';
 import '../../../localization/demo_strings.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
 import '../profile_providers.dart';
@@ -18,19 +19,19 @@ import '../profile_providers.dart';
 class ProfileState {
   const ProfileState({
     this.viewState = ViewState.idle,
-    this.errorMessage = '',
+    this.errorMessage,
     this.user,
   });
 
   final ViewState viewState;
-  final String errorMessage;
+  final UserMessage? errorMessage;
 
   /// 详情加载成功前为 null，View 可以暂时回退显示 AuthState 基础用户。
   final UserModel? user;
 
   ProfileState copyWith({
     ViewState? viewState,
-    String? errorMessage,
+    UserMessage? errorMessage,
     UserModel? user,
     bool clearUser = false,
   }) {
@@ -45,7 +46,7 @@ class ProfileState {
 // ==================== Notifier ====================
 
 class ProfileNotifier extends Notifier<ProfileState> {
-  // 与 autoDispose Provider 同生命周期，集中管理 CancelToken。
+  // 与 autoDispose Provider 同生命周期，集中管理与网络库无关的取消令牌。
   late final _handler = AsyncRequestHandler();
 
   @override
@@ -60,7 +61,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
     if (currentUser == null) {
       state = state.copyWith(
         viewState: ViewState.error,
-        errorMessage: DemoStrings.userMissing,
+        errorMessage: const UserMessage.text(DemoStrings.userMissing),
       );
       return;
     }

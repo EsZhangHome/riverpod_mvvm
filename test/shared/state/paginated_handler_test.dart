@@ -5,10 +5,11 @@
 
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import 'package:riverpod_mvvm/shared/state/paginated_handler.dart';
 import 'package:riverpod_mvvm/shared/state/view_state.dart';
+import 'package:riverpod_mvvm/shared/localization/user_message.dart';
 
 void main() {
   test('refresh passes a token and replaces the first page', () async {
@@ -89,7 +90,7 @@ void main() {
   test('refresh cancels active loadMore and drops its late result', () async {
     final handler = PaginatedListHandler<int>();
     addTearDown(handler.dispose);
-    final loadMoreStarted = Completer<CancelToken>();
+    final loadMoreStarted = Completer<RequestCancellationToken>();
     var current = PaginatedListState<int>(
       viewState: ViewState.success,
       items: [1],
@@ -98,7 +99,7 @@ void main() {
     final loadMore = handler.loadMore(
       fetchPage: (_, token) async {
         loadMoreStarted.complete(token);
-        await token.whenCancel;
+        await token.whenCancelled;
         return [2];
       },
       readState: () => current,
@@ -120,14 +121,14 @@ void main() {
     'dispose cancels an active page request and drops late results',
     () async {
       final handler = PaginatedListHandler<int>();
-      final requestStarted = Completer<CancelToken>();
+      final requestStarted = Completer<RequestCancellationToken>();
       var current = PaginatedListState<int>();
       final states = <PaginatedListState<int>>[];
 
       final request = handler.refresh(
         fetchPage: (page, cancelToken) async {
           requestStarted.complete(cancelToken);
-          await cancelToken.whenCancel;
+          await cancelToken.whenCancelled;
           return [1];
         },
         readState: () => current,
@@ -158,7 +159,7 @@ void main() {
     );
 
     expect(current.viewState, ViewState.error);
-    expect(current.errorMessage, '请求失败，请稍后重试');
-    expect(current.errorMessage, isNot(contains('database password')));
+    expect(current.errorMessage?.key, UserMessageKey.requestFailed);
+    expect(current.errorMessage?.text, isNull);
   });
 }

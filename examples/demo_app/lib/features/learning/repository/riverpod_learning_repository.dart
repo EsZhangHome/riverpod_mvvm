@@ -122,15 +122,15 @@ final orderStatusProvider = StreamProvider.autoDispose
 });''',
         ),
         RiverpodCodeExample(
-          title: 'refresh / invalidate / CancelToken',
+          title: 'refresh / invalidate / 请求取消',
           code: r'''// refresh：立即重建并等待新的 Future，适合下拉刷新。
 await ref.refresh(orderFeedProvider.future);
 
 // invalidate：销毁当前状态；有活动监听时会在后续帧重建，否则等下次读取再创建。
 ref.invalidate(orderDetailProvider(orderId));
 
-// Provider 销毁时取消未完成的 Dio 请求。
-final cancelToken = CancelToken();
+// Provider 销毁时取消未完成请求；上层不需要知道底层使用 Dio 还是其他网络库。
+final cancelToken = RequestCancellationToken();
 ref.onDispose(() => cancelToken.cancel('page disposed'));
 await repository.fetchOrder(orderId, cancelToken: cancelToken);''',
         ),

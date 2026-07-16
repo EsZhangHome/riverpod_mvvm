@@ -10,7 +10,6 @@ import 'package:riverpod_mvvm/app/app.dart';
 import 'package:riverpod_mvvm/app/starter/starter.dart';
 import 'package:riverpod_mvvm/app/starter/starter_home_page.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
-import 'package:riverpod_mvvm/shared/localization/app_strings.dart';
 
 final class _MemorySessionStore implements SessionStore {
   _MemorySessionStore(this.session);
@@ -57,6 +56,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(store.session, isNull);
-    expect(find.text(AppStrings.login), findsWidgets);
+    expect(find.byKey(const ValueKey('login.submit')), findsOneWidget);
   });
 }

@@ -18,8 +18,8 @@ enum RequestReplayPolicy {
 /// 单次网络请求携带的附加上下文。
 ///
 /// 对象不可变，可以安全地从 ViewModel 传到 Repository 再传给 ApiService。
-/// 本对象自身没有 Dio 类型，因此更换网络实现时，请求 ID、幂等键等参数不需要
-/// 跟着修改。ApiService 目前公开的 CancelToken/ProgressCallback 仍需单独迁移。
+/// 本对象、ApiService 的取消令牌和进度回调都没有 Dio 类型，因此更换网络实现时，
+/// 请求 ID、幂等键以及 Repository 的方法签名都不需要跟着修改。
 class RequestContext {
   /// 创建单次请求上下文。
   ///
@@ -32,7 +32,6 @@ class RequestContext {
     this.idempotencyKey,
     this.allowRetry = false,
     this.replayPolicy = RequestReplayPolicy.automatic,
-    this.trackNetworkQuality = true,
     this.extra = const {},
   });
 
@@ -55,7 +54,8 @@ class RequestContext {
   final String? idempotencyKey;
 
   /// 是否允许 RetryInterceptor 重试非 GET/HEAD 请求。
-  /// POST/PUT/PATCH/DELETE 默认不能安全重试，只有确认服务端幂等后才设为 true。
+  /// POST/PUT/PATCH/DELETE 默认不能安全重试，只有确认服务端幂等后才设为 true，
+  /// 并且必须同时提供非空 [idempotencyKey]；缺少任一条件时拦截器都不会重试。
   /// 该开关只影响超时/连接错误重试，不等同于 401 Token 刷新后的 [replayPolicy]。
   final bool allowRetry;
 
@@ -63,13 +63,6 @@ class RequestContext {
   /// 敏感写操作、文件流或无法重新构造的 body 应设为 never。设为 never 后，新 token
   /// 仍会保存供下一次手工请求使用，但当前 401 会继续返回给调用方。
   final RequestReplayPolicy replayPolicy;
-
-  /// 是否把本请求耗时和网络传输失败计入全局弱网判断。
-  ///
-  /// 普通 JSON 接口保持 true。长轮询、流式响应、大文件等天然耗时请求应设为 false，
-  /// 否则它们可能被误认为慢网络。上传/下载由 ApiClient 内部强制排除，不需要调用方
-  /// 重复设置。关闭本开关只影响质量提示，不影响超时、错误转换、重试或性能上报。
-  final bool trackNetworkQuality;
 
   /// 给自定义拦截器传递、不发送给服务器的 Dio extra 元数据。
   ///

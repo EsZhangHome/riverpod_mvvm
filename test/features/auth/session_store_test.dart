@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:riverpod_mvvm/core/errors/storage_exception.dart';
 import 'package:riverpod_mvvm/core/storage/secure_storage_service.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
 import 'package:riverpod_mvvm/features/auth/repository/session_store.dart';
@@ -52,6 +53,23 @@ void main() {
       expect(storage.values['auth_token'], isNull);
     },
   );
+
+  test('corrupted persisted session becomes a typed storage failure', () async {
+    final storage = _MemorySecureStorage()
+      ..values['auth_session_v1'] = '{invalid-json';
+    final store = SecureSessionStore(storage);
+
+    await expectLater(
+      store.read(),
+      throwsA(
+        isA<StorageException>().having(
+          (error) => error.cause,
+          'original cause',
+          isA<FormatException>(),
+        ),
+      ),
+    );
+  });
 }
 
 final class _MemorySecureStorage implements SecureStorageService {

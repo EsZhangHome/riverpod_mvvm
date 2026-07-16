@@ -21,11 +21,11 @@
 
 import 'dart:async';
 
-import 'package:dio/dio.dart';
-
 import 'package:riverpod_mvvm/core/cache/cache_policy.dart';
 import 'package:riverpod_mvvm/core/config/env_config.dart';
+import 'package:riverpod_mvvm/core/errors/app_failure.dart';
 import 'package:riverpod_mvvm/core/network/api_service.dart';
+import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import 'package:riverpod_mvvm/core/utils/crash_reporter.dart';
 import '../../../core/demo_endpoints.dart';
 import '../model/home_banner.dart';
@@ -39,7 +39,9 @@ abstract class HomeRepository {
   /// [cancelToken]：由调用方管理的取消令牌；当前 Demo 在 Provider 销毁时取消。
   ///
   /// 返回 Banner 列表，可能来自缓存或网络。
-  Future<List<HomeBanner>> fetchBanners({CancelToken? cancelToken});
+  Future<List<HomeBanner>> fetchBanners({
+    RequestCancellationToken? cancelToken,
+  });
 }
 
 /// 首页数据仓库实现。
@@ -56,7 +58,9 @@ class HomeRepositoryImpl implements HomeRepository {
   final CachePolicy<List<HomeBanner>> _cachePolicy;
 
   @override
-  Future<List<HomeBanner>> fetchBanners({CancelToken? cancelToken}) async {
+  Future<List<HomeBanner>> fetchBanners({
+    RequestCancellationToken? cancelToken,
+  }) async {
     final cachedData = await _cachePolicy.readCache();
     if (cachedData != null) {
       // 缓存先返回给页面，后台刷新不阻塞首屏；显式 unawaited 表达“有意后台执行”。
@@ -65,8 +69,7 @@ class HomeRepositoryImpl implements HomeRepository {
           try {
             await _fetchRemoteBanners(cancelToken: cancelToken);
           } catch (error, stackTrace) {
-            if (error is DioException &&
-                error.type == DioExceptionType.cancel) {
+            if (error is AppFailure && error.isCancellation) {
               return;
             }
             CrashReporter.report(error, stackTrace);
@@ -80,7 +83,7 @@ class HomeRepositoryImpl implements HomeRepository {
 
   /// 获取远端 Banner 数据，根据 EnvConfig.enableMock 决定使用 Mock 还是真实接口。
   Future<List<HomeBanner>> _fetchRemoteBanners({
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
   }) async {
     if (EnvConfig.enableMock) {
       return _fetchMockBanners();
@@ -101,7 +104,9 @@ class HomeRepositoryImpl implements HomeRepository {
   }
 
   /// 真实后端数据。
-  Future<List<HomeBanner>> _fetchApiBanners({CancelToken? cancelToken}) async {
+  Future<List<HomeBanner>> _fetchApiBanners({
+    RequestCancellationToken? cancelToken,
+  }) async {
     final response = await _apiService.get<List<HomeBanner>>(
       DemoEndpoints.homeBanners,
       cancelToken: cancelToken,

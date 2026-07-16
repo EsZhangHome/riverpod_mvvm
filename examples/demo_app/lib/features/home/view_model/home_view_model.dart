@@ -3,7 +3,7 @@
 // 作用：首页 Notifier，负责首页数据加载和状态管理。
 //
 // 这是一个保留给未来 Banner 接口的完整网络生命周期示例：
-// View 调用 loadHome -> Notifier 读取 Repository -> Repository 透传 CancelToken
+// View 调用 loadHome -> Notifier 读取 Repository -> Repository 透传取消令牌
 // -> Handler 把结果转换为 ViewState -> View watch HomeState 重建。
 //
 // 建议阅读顺序：HomeState -> HomeNotifier.build -> loadHome -> homeProvider。
@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:riverpod_mvvm/shared/state/async_request_handler.dart';
 import 'package:riverpod_mvvm/shared/state/view_state.dart';
+import 'package:riverpod_mvvm/shared/localization/user_message.dart';
 import '../home_providers.dart';
 import '../model/home_banner.dart';
 
@@ -23,22 +24,22 @@ import '../model/home_banner.dart';
 class HomeState {
   const HomeState({
     this.viewState = ViewState.idle,
-    this.errorMessage = '',
+    this.errorMessage,
     this.banners = const [],
   });
 
   /// 控制页面级 idle/loading/success/empty/error 展示。
   final ViewState viewState;
 
-  /// 已转换为可展示内容的错误文案，不向 View 泄漏技术异常。
-  final String errorMessage;
+  /// 已转换为类型化用户消息的错误，不向 View 泄漏技术异常或固定语言。
+  final UserMessage? errorMessage;
 
   /// 请求成功后的 Banner 列表；空列表与 empty 状态配合表达空页面。
   final List<HomeBanner> banners;
 
   HomeState copyWith({
     ViewState? viewState,
-    String? errorMessage,
+    UserMessage? errorMessage,
     List<HomeBanner>? banners,
   }) {
     // State 不原地修改。每次返回新对象，让 Riverpod 可以可靠通知监听者。
@@ -59,7 +60,7 @@ class HomeNotifier extends Notifier<HomeState> {
 
   @override
   HomeState build() {
-    // autoDispose 的最后一个监听者离开后，取消仍未结束的 Dio 请求。
+    // autoDispose 的最后一个监听者离开后，取消仍未结束的底层网络请求。
     ref.onDispose(() => _handler.dispose());
     return const HomeState();
   }

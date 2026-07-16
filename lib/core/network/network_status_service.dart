@@ -8,6 +8,9 @@
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+import '../errors/app_failure.dart';
+import '../errors/platform_service_exception.dart';
+
 /// 当前网络连接类型。
 ///
 /// none 表示当前设备没有可用网络连接。
@@ -65,10 +68,12 @@ class NetworkStatus {
 
 /// 网络状态服务抽象。
 abstract class NetworkStatusService {
-  /// 主动查询一次当前网络状态。平台通道失败时 Future 会抛错。
+  /// 主动查询一次当前网络状态。平台通道失败时抛 PlatformServiceException；这不等于
+  /// NetworkConnectionType.none，调用方不能把“插件故障”提示成“设备已断网”。
   Future<NetworkStatus> getCurrentStatus();
 
-  /// 监听系统连接类型变化。调用方取消 Stream 订阅后应释放插件监听。
+  /// 监听系统连接类型变化。插件流故障同样转换为 PlatformServiceException；调用方
+  /// 取消 Stream 订阅后应释放插件监听。
   /// 本 Stream 不保证立即发出当前值，需要首值时先调用 [getCurrentStatus]。
   Stream<NetworkStatus> watchStatus();
 }
@@ -84,13 +89,40 @@ class ConnectivityNetworkStatusService implements NetworkStatusService {
 
   @override
   Future<NetworkStatus> getCurrentStatus() async {
-    final result = await _connectivity.checkConnectivity();
-    return mapConnectivityResult(result);
+    try {
+      final result = await _connectivity.checkConnectivity();
+      return mapConnectivityResult(result);
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error, stackTrace) {
+      throw _failure('checking current network status', error, stackTrace);
+    }
   }
 
   @override
-  Stream<NetworkStatus> watchStatus() {
-    return _connectivity.onConnectivityChanged.map(mapConnectivityResult);
+  Stream<NetworkStatus> watchStatus() async* {
+    try {
+      await for (final results in _connectivity.onConnectivityChanged) {
+        yield mapConnectivityResult(results);
+      }
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error, stackTrace) {
+      throw _failure('watching network status', error, stackTrace);
+    }
+  }
+
+  PlatformServiceException _failure(
+    String operation,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    return PlatformServiceException(
+      service: 'connectivity_plus',
+      operation: operation,
+      cause: error,
+      stackTrace: stackTrace,
+    );
   }
 
   /// 把三方库的 ConnectivityResult 列表转成项目自己的 NetworkStatus。

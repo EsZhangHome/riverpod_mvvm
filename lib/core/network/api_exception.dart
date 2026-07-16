@@ -19,7 +19,7 @@ import '../errors/app_failure.dart';
 
 /// 网络层统一异常。
 ///
-/// ViewModel 只关心 code 和 message，不需要知道 Dio 的复杂错误类型。
+/// ViewModel 只关心稳定的 kind/code，不需要知道 Dio 的复杂错误类型。
 /// 所有网络相关异常最终都会转换为 ApiException 或其子类。
 class ApiException extends AppFailure {
   /// 创建稳定网络异常。
@@ -30,7 +30,23 @@ class ApiException extends AppFailure {
     required this.code,
     required this.message,
     super.kind = FailureKind.protocol,
+    super.cause,
+    super.stackTrace,
   }) : super(debugMessage: message, failureCode: code);
+
+  /// 把响应结构或 Model 解码异常转换成可观测的协议失败。
+  ///
+  /// [cause] 和 [stackTrace] 保留 decoder 真正失败的位置；UI 仍只看到本地化协议
+  /// 错误，不会暴露原始 JSON、字段值或异常字符串。
+  factory ApiException.protocol(Object cause, StackTrace stackTrace) {
+    return ApiException(
+      code: unknownError,
+      message: 'Response decoding failed',
+      kind: FailureKind.protocol,
+      cause: cause,
+      stackTrace: stackTrace,
+    );
+  }
 
   /// 错误码。
   /// 正数：HTTP 状态码或后端业务码
@@ -129,20 +145,26 @@ class ApiException extends AppFailure {
       // ---- 未知错误 ----
       // 无法归类的异常，兜底处理
       case DioExceptionType.unknown:
-        return const ApiException(
+        return ApiException(
           code: unknownError,
           message: 'Unknown network error',
           kind: FailureKind.unknown,
+          // error.error 通常是 SocketException/HandshakeException 等真正根因；只保存
+          // 这一层，不保存包含 Header、请求体和 Response 的完整 DioException。
+          cause: error.error,
+          stackTrace: error.stackTrace,
         );
 
       // Dio 后续版本可能新增异常类型。底座不能因为依赖包增加枚举值就无法编译，
       // 未识别类型统一映射为 unknown；网络日志只记录脱敏后的错误类型与状态码。
       // ignore: unreachable_switch_default
       default:
-        return const ApiException(
+        return ApiException(
           code: unknownError,
           message: 'Unknown network error',
           kind: FailureKind.unknown,
+          cause: error.error,
+          stackTrace: error.stackTrace,
         );
     }
   }

@@ -1,13 +1,14 @@
 // AsyncRequestHandler 生命周期测试。
 //
 // Handler 不依赖 Widget 或 ProviderContainer，因此直接验证请求、状态回调、
-// 防重复和 CancelToken；Notifier 测试只需关注业务状态组合。
+// 防重复和取消令牌；Notifier 测试只需关注业务状态组合。
 
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/shared/state/async_request_handler.dart';
 import 'package:riverpod_mvvm/core/network/api_exception.dart';
+import 'package:riverpod_mvvm/shared/localization/user_message.dart';
 
 void main() {
   test('successful request calls loading and success in order', () async {
@@ -19,7 +20,7 @@ void main() {
       request: () async => 7,
       onLoading: () => events.add('loading'),
       onSuccess: () => events.add('success'),
-      onError: (message) => events.add('error:$message'),
+      onError: (message) => events.add('error:${message.key?.name}'),
     );
 
     expect(result, 7);
@@ -83,7 +84,7 @@ void main() {
       request: () => resultCompleter.future,
       onLoading: () => events.add('loading'),
       onSuccess: () => events.add('success'),
-      onError: (message) => events.add('error:$message'),
+      onError: (message) => events.add('error:${message.key?.name}'),
     );
     handler.dispose();
     resultCompleter.complete(1);
@@ -96,7 +97,7 @@ void main() {
   test('business and unknown errors are converted to safe messages', () async {
     final handler = AsyncRequestHandler();
     addTearDown(handler.dispose);
-    final messages = <String>[];
+    final messages = <UserMessage>[];
 
     await handler.execute<void>(
       request: () => throw BusinessException(code: 1, userMessage: '余额不足'),
@@ -121,6 +122,8 @@ void main() {
       onError: messages.add,
     );
 
-    expect(messages, ['余额不足', '请求失败，请稍后重试', '请求失败，请稍后重试']);
+    expect(messages[0].text, '余额不足');
+    expect(messages[1].key, UserMessageKey.requestFailed);
+    expect(messages[2].key, UserMessageKey.requestFailed);
   });
 }

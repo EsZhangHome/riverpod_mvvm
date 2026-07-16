@@ -53,8 +53,9 @@ Future<void> main() {
   -> failed：显示启动失败页
 ```
 
-这里的 `LocalStorage` 是普通偏好存储，主要服务主题和旧数据迁移。登录 Token 使用的是后面的
-`SecureSessionStore`，所以 Bootstrap 完成不代表用户已经登录。
+这里的 `LocalStorage` 只是 Bootstrap 使用的 SharedPreferences 初始化边界。业务 Provider 创建后，主题和
+旧数据迁移都通过可替换的 `PreferencesStore` 访问普通偏好，不再直接依赖静态插件适配器。登录 Token 使用的
+是后面的 `SecureSessionStore`，所以 Bootstrap 完成不代表用户已经登录。
 
 Bootstrap 不处理数据库、首页接口、地图、支付和普通 SDK 预热。
 
@@ -116,6 +117,13 @@ auth_session_v1 完整有效       -> AuthState.authenticated
   -> 用户登录成功、authProvider 更新
   -> /orders/100?tab=history
 ```
+
+登录按钮只调用 `LoginNotifier.login(account, password)`。Notifier 校验表单后调用 `SignIn` 抽象；默认
+`SignInUseCase` 负责请求 LoginRepository、把 token/user 组成完整会话，再调用 `SessionActivator`。
+`AuthNotifier` 是该端口的默认实现，负责写入 SessionStore 和更新 authProvider。
+
+因此 `LoginPage` 不读取登录响应，`LoginNotifier` 也不直接依赖 AuthNotifier。无论最终回到订单页还是默认
+首页，页面层和页面状态层都不需要知道具体会话存储与路由编排细节。
 
 公开页面也会被保留，但恢复后不会强制登录。`returnTo` 只接受以 `/` 开头的 App 内部 URI，以下地址会被拒绝：
 

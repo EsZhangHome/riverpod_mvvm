@@ -51,13 +51,15 @@ class AppFailure implements Exception {
   /// - [debugMessage]：仅供日志/监控的技术描述；
   /// - [failureCode]：可选 HTTP、业务或本地错误码；
   /// - [suggestedMessage]：只有明确审核为可展示内容时才填写；
-  /// - [cause]：被包装的原始异常，帮助监控追踪根因。
+  /// - [cause]：被包装的原始异常，帮助监控追踪根因；
+  /// - [stackTrace]：原始异常发生位置，不是包装代码重新 throw 的位置。
   const AppFailure({
     required this.kind,
     required this.debugMessage,
     this.failureCode,
     this.suggestedMessage,
     this.cause,
+    this.stackTrace,
   });
 
   /// 展示层据此选择安全、本地化的用户提示。
@@ -75,9 +77,32 @@ class AppFailure implements Exception {
   /// 保留原始异常链，接监控平台时可继续追踪根因。
   final Object? cause;
 
+  /// 原始异常发生位置。
+  ///
+  /// 包装异常时如果只保存新的 catch 堆栈，会丢失 decoder、数据库插件等真正失败
+  /// 的代码位置。基础设施边界应把原始 stack 一起传入；普通业务失败可以为空。
+  final StackTrace? stackTrace;
+
   /// 取消可能来自页面销毁、刷新替换旧请求或用户主动停止，不应当成失败弹 Toast
   /// 或进入 error 页面。
   bool get isCancellation => kind == FailureKind.cancellation;
+
+  /// 是否应该进入崩溃/非致命监控。
+  ///
+  /// 网络断开、超时、登录失效、权限和业务拒绝是可预期运行结果，全部上报会制造
+  /// 告警噪音；存储、协议和未知失败通常意味着设备基础设施或客户端契约有问题，
+  /// 应保留原始 cause/stack 供排查。
+  bool get shouldReport => switch (kind) {
+    FailureKind.storage || FailureKind.protocol || FailureKind.unknown => true,
+    FailureKind.network ||
+    FailureKind.timeout ||
+    FailureKind.server ||
+    FailureKind.authentication ||
+    FailureKind.permission ||
+    FailureKind.validation ||
+    FailureKind.business ||
+    FailureKind.cancellation => false,
+  };
 
   @override
   String toString() => 'AppFailure($kind, $failureCode, $debugMessage)';

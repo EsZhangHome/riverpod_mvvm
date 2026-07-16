@@ -24,7 +24,7 @@ jobs:
           cache: true
       - run: flutter pub get
       - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed lib test tool
+        run: dart format --output=none --set-exit-if-changed lib test integration_test tool
       - name: Verify generated code
         run: |
           dart run build_runner build
@@ -32,7 +32,7 @@ jobs:
       - run: flutter analyze
       - run: flutter test --coverage
       - name: Enforce coverage floor
-        run: dart run tool/check_coverage.dart --minimum 55
+        run: dart run tool/check_coverage.dart --minimum 70
       - name: Build debug APK
         run: flutter build apk --debug --dart-define-from-file=config/development.json
 
@@ -65,3 +65,25 @@ jobs:
         if: ${{ hashFiles('examples/demo_app/pubspec.yaml') != '' }}
       - run: flutter test
         if: ${{ hashFiles('examples/demo_app/pubspec.yaml') != '' }}
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # 集成测试必须运行在真实 Flutter Engine/设备上。Android 模拟器只承载 App，
+      # 业务流程中的 Repository、SessionStore 和连接状态仍由测试替换，不依赖外部
+      # 后端或测试账号；基础设施冒烟用例会真实验证 SQLite 与安全存储平台通道。
+      - name: Run app flow integration tests
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          script: flutter test integration_test -d emulator-5554 --dart-define-from-file=config/development.json

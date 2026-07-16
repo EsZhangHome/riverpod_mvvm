@@ -3,12 +3,11 @@
 // 页码分页的通用请求协调器。它只处理请求互斥、取消、状态流转和基于最新状态
 // 合并，不假设业务 Model 有 id。需要 cursor 或按 id 去重时由业务提供 mergePage。
 
-import 'package:dio/dio.dart';
-
 import '../../core/errors/app_failure.dart';
-import '../../core/network/api_exception.dart';
-import '../../core/utils/crash_reporter.dart';
+import '../../core/errors/failure_observer.dart';
+import '../../core/network/request_cancellation.dart';
 import '../errors/failure_message_resolver.dart';
+import '../localization/user_message.dart';
 import 'view_state.dart';
 
 /// 页码分页页面的不可变状态。
@@ -28,7 +27,7 @@ class PaginatedListState<T> {
   /// 或底部加载器；它们不是 [viewState] 的重复字段。
   PaginatedListState({
     this.viewState = ViewState.idle,
-    this.errorMessage = '',
+    this.errorMessage,
     List<T> items = const [],
     this.page = 1,
     this.hasMore = true,
@@ -40,7 +39,7 @@ class PaginatedListState<T> {
   final ViewState viewState;
 
   /// 最近一次失败的可展示文案，成功刷新/加载更多后会清空。
-  final String errorMessage;
+  final UserMessage? errorMessage;
 
   /// 当前已经合并完成的不可变列表。
   final List<T> items;
@@ -63,7 +62,8 @@ class PaginatedListState<T> {
   /// 外部继续修改原 List 而在没有 state 赋值时悄悄变化。
   PaginatedListState<T> copyWith({
     ViewState? viewState,
-    String? errorMessage,
+    UserMessage? errorMessage,
+    bool clearErrorMessage = false,
     List<T>? items,
     int? page,
     bool? hasMore,
@@ -72,7 +72,9 @@ class PaginatedListState<T> {
   }) {
     return PaginatedListState<T>(
       viewState: viewState ?? this.viewState,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: clearErrorMessage
+          ? null
+          : errorMessage ?? this.errorMessage,
       items: items ?? this.items,
       page: page ?? this.page,
       hasMore: hasMore ?? this.hasMore,
@@ -84,7 +86,7 @@ class PaginatedListState<T> {
 
 /// 获取指定 [page] 的业务数据；[cancelToken] 必须继续传给 Repository/ApiService。
 typedef PageFetcher<T> =
-    Future<List<T>> Function(int page, CancelToken cancelToken);
+    Future<List<T>> Function(int page, RequestCancellationToken cancelToken);
 
 /// 在异步返回的最后时刻读取 ViewModel 最新分页状态，避免使用过期闭包快照。
 typedef PageStateReader<T> = PaginatedListState<T> Function();
@@ -111,7 +113,7 @@ class PaginatedListHandler<T> {
   int _generation = 0;
 
   /// 当前请求取消令牌；refresh 会取消旧令牌，dispose 会取消最后一个令牌。
-  CancelToken? _activeToken;
+  RequestCancellationToken? _activeToken;
 
   /// 下拉刷新优先级高于加载更多：它会取消当前请求并启动新一代请求。
   ///
@@ -137,7 +139,7 @@ class PaginatedListHandler<T> {
 
     final generation = ++_generation;
     _activeToken?.cancel('superseded by refresh');
-    final token = CancelToken();
+    final token = RequestCancellationToken();
     _activeToken = token;
     _isLoadingMore = false;
 
@@ -159,7 +161,7 @@ class PaginatedListHandler<T> {
           hasMore: incoming.length >= pageSize,
           isRefreshing: false,
           isLoadingMore: false,
-          errorMessage: '',
+          clearErrorMessage: true,
         ),
       );
     } catch (error, stackTrace) {
@@ -205,7 +207,7 @@ class PaginatedListHandler<T> {
 
     _isLoadingMore = true;
     final generation = ++_generation;
-    final token = CancelToken();
+    final token = RequestCancellationToken();
     _activeToken = token;
     final nextPage = initial.page + 1;
     onStateChanged(initial.copyWith(isLoadingMore: true));
@@ -223,7 +225,7 @@ class PaginatedListHandler<T> {
           page: nextPage,
           hasMore: incoming.length >= pageSize,
           isLoadingMore: false,
-          errorMessage: '',
+          clearErrorMessage: true,
         ),
       );
     } catch (error, stackTrace) {
@@ -247,20 +249,21 @@ class PaginatedListHandler<T> {
   ///
   /// [generation] 是请求开始时保存的代数，[token] 是该请求专属令牌；只有 Handler
   /// 未销毁、代数仍最新且 token 未取消时才允许回写状态。
-  bool _isCurrent(int generation, CancelToken token) {
+  bool _isCurrent(int generation, RequestCancellationToken token) {
     return !_isDisposed && generation == _generation && !token.isCancelled;
   }
 
-  /// 同时识别主动 token 取消、统一 ApiException 取消和原始 Dio 取消异常。
-  bool _isCancellation(Object error, CancelToken token) {
-    return token.isCancelled ||
-        (error is ApiException && error.isCancelled) ||
-        error is DioException && error.type == DioExceptionType.cancel;
+  /// 同时识别主动 token 取消和网络层已经归一化的取消失败。
+  ///
+  /// 这里不识别 DioException，因为共享状态层不应该知道具体网络库。ApiClient 已把
+  /// Dio 的取消异常转换成 AppFailure；Fake 数据源则可直接取消传入的令牌。
+  bool _isCancellation(Object error, RequestCancellationToken token) {
+    return token.isCancelled || (error is AppFailure && error.isCancellation);
   }
 
   /// 上报非预期编程/解析异常；已经分类的 AppFailure 只交给页面正常展示。
   void _reportUnexpected(Object error, StackTrace stackTrace) {
-    if (error is! AppFailure) CrashReporter.report(error, stackTrace);
+    FailureObserver.reportIfNeeded(error, stackTrace);
   }
 
   /// 结束协调器生命周期并取消当前分页请求。

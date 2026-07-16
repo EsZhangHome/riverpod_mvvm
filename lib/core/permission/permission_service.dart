@@ -7,6 +7,9 @@
 
 import 'package:permission_handler/permission_handler.dart' as handler;
 
+import '../errors/app_failure.dart';
+import '../errors/platform_service_exception.dart';
+
 /// App 内部关心的权限类型。
 ///
 /// 这里只列中型业务 App 常见权限。后续需要蓝牙、通讯录等权限时，再按需增加。
@@ -81,7 +84,8 @@ class AppPermissionResult {
 abstract class PermissionService {
   /// 查询 [type] 当前状态，不弹系统授权框。
   ///
-  /// 返回值同时包含 type/status；平台插件异常会原样抛出，由调用方按业务场景处理。
+  /// 返回值同时包含 type/status；平台插件故障会转换为 PlatformServiceException，
+  /// 它和用户主动拒绝返回的 denied 是两种不同结果。
   Future<AppPermissionResult> check(AppPermissionType type);
 
   /// 请求 [type]，可能弹系统授权框。
@@ -100,21 +104,47 @@ abstract class PermissionService {
 class PermissionHandlerService implements PermissionService {
   @override
   Future<AppPermissionResult> check(AppPermissionType type) async {
-    final permission = mapPermissionType(type);
-    final status = await permission.status;
-    return AppPermissionResult(type: type, status: mapPermissionStatus(status));
+    return _guard('checking permission status', () async {
+      final permission = mapPermissionType(type);
+      final status = await permission.status;
+      return AppPermissionResult(
+        type: type,
+        status: mapPermissionStatus(status),
+      );
+    });
   }
 
   @override
   Future<AppPermissionResult> request(AppPermissionType type) async {
-    final permission = mapPermissionType(type);
-    final status = await permission.request();
-    return AppPermissionResult(type: type, status: mapPermissionStatus(status));
+    return _guard('requesting permission', () async {
+      final permission = mapPermissionType(type);
+      final status = await permission.request();
+      return AppPermissionResult(
+        type: type,
+        status: mapPermissionStatus(status),
+      );
+    });
   }
 
   @override
   Future<bool> openSettings() {
-    return handler.openAppSettings();
+    return _guard('opening application settings', handler.openAppSettings);
+  }
+
+  /// 平台插件故障不是权限拒绝，统一包装成可观测的未知基础设施失败。
+  Future<T> _guard<T>(String operation, Future<T> Function() action) async {
+    try {
+      return await action();
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error, stackTrace) {
+      throw PlatformServiceException(
+        service: 'permission_handler',
+        operation: operation,
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// 把项目权限类型 [type] 映射到 permission_handler 权限类型。

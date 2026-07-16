@@ -8,8 +8,25 @@
     }
   },
   "retry": "Retry",
+  "login": "Sign in",
+  "account": "Phone or email",
+  "password": "Password",
+  "enterAccount": "Enter your phone number or email",
+  "enterPassword": "Enter your password",
+  "backHome": "Back to home",
+  "noData": "No data",
+  "pageNotFound": "Page not found",
+  "requestTimeout": "The request timed out. Try again later.",
+  "requestCanceled": "The request was canceled",
+  "networkError": "Network connection error",
+  "unknownError": "Something went wrong. Try again later.",
+  "serverError": "Server error. Try again later.",
+  "requestFailed": "Request failed. Try again later.",
+  "sessionExpired": "Your session has expired. Sign in again.",
+  "permissionDenied": "You do not have permission to do this",
+  "validationFailed": "Please check the submitted information",
+  "storageError": "Local data could not be saved",
+  "protocolError": "The server response format is invalid",
   "networkDisconnected": "No network connection. Check your network settings.",
-  "networkRestored": "Network connection restored",
-  "networkPoor": "The network is slow. Trying to reconnect.",
-  "networkQualityRestored": "Network quality restored"
+  "networkRestored": "Network connection restored"
 }

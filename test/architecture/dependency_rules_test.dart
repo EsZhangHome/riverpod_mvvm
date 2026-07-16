@@ -59,8 +59,83 @@ void main() {
     violations.addAll(
       _findStarterBoundaryViolations(dependencies, libRoot, projectRoot),
     );
+    violations.addAll(
+      _findInfrastructurePackageBoundaryViolations(projectRoot),
+    );
     expect(violations, isEmpty, reason: '发现模块依赖越界：\n${violations.join('\n')}');
   });
+}
+
+/// 保证第三方基础设施插件只存在于明确的适配目录。
+///
+/// 仅限制真正的平台/传输实现，不限制 go_router、flutter_riverpod 等应用编排库。
+/// Repository、Application、ViewModel、View 和可拔插 Demo 必须依赖底座稳定接口；
+/// 未来替换 Dio、SQLite、偏好、安全存储或设备插件时，业务代码不应批量迁移。
+List<String> _findInfrastructurePackageBoundaryViolations(String projectRoot) {
+  const allowedLocations = <String, List<String>>{
+    'package:dio/': ['lib/core/network'],
+    'package:sqflite/': [
+      'lib/core/database',
+      'lib/core/providers/service_providers.dart',
+    ],
+    'package:shared_preferences/': ['lib/core/storage/local_storage.dart'],
+    'package:flutter_secure_storage/': [
+      'lib/core/storage/secure_storage_service.dart',
+    ],
+    'package:connectivity_plus/': [
+      'lib/core/network/network_status_service.dart',
+    ],
+    'package:permission_handler/': [
+      'lib/core/permission/permission_service.dart',
+    ],
+    'package:package_info_plus/': ['lib/core/app/app_info_service.dart'],
+    'package:cached_network_image/': ['lib/shared/ui/app_network_image.dart'],
+  };
+  final sourceRoots = [
+    Directory(p.join(projectRoot, 'lib')),
+    Directory(p.join(projectRoot, 'examples', 'demo_app', 'lib')),
+  ];
+  final violations = <String>[];
+  final directivePattern = RegExp(
+    r"^(?:import|export)\s+'([^']+)'",
+    multiLine: true,
+  );
+
+  for (final sourceRoot in sourceRoots.where(
+    (directory) => directory.existsSync(),
+  )) {
+    for (final entity in sourceRoot.listSync(recursive: true)) {
+      if (entity is! File ||
+          !entity.path.endsWith('.dart') ||
+          entity.path.endsWith('.g.dart')) {
+        continue;
+      }
+      final path = p.normalize(entity.absolute.path);
+      for (final match in directivePattern.allMatches(
+        entity.readAsStringSync(),
+      )) {
+        final uri = match.group(1)!;
+        final boundary = allowedLocations.entries
+            .where((entry) => uri.startsWith(entry.key))
+            .firstOrNull;
+        if (boundary == null) continue;
+
+        final allowed = boundary.value.any((relativeLocation) {
+          final location = p.normalize(p.join(projectRoot, relativeLocation));
+          return relativeLocation.endsWith('.dart')
+              ? p.equals(path, location)
+              : p.equals(path, location) || p.isWithin(location, path);
+        });
+        if (allowed) continue;
+
+        violations.add(
+          '${p.relative(path, from: projectRoot)} -> $uri：'
+          '该基础设施包只能出现在 ${boundary.value.join('、')}',
+        );
+      }
+    }
+  }
+  return violations..sort();
 }
 
 /// 保证占位 Starter 保持“单入口可删除”。
@@ -134,23 +209,32 @@ List<String> _findMvvmLayerViolations(
       String? reason;
 
       if (sourceRole == 'model' &&
-          const {'repository', 'view_model', 'view'}.contains(targetRole)) {
-        reason = 'Model 不能反向依赖 Repository、ViewModel 或 View';
+          const {
+            'repository',
+            'application',
+            'view_model',
+            'view',
+          }.contains(targetRole)) {
+        reason = 'Model 不能反向依赖 Repository、Application、ViewModel 或 View';
       } else if (sourceRole == 'repository' &&
+          const {'application', 'view_model', 'view'}.contains(targetRole)) {
+        reason = 'Repository 不能反向依赖 Application、ViewModel 或 View';
+      } else if (sourceRole == 'application' &&
           const {'view_model', 'view'}.contains(targetRole)) {
-        reason = 'Repository 不能反向依赖 ViewModel 或 View';
+        reason = 'Application 用例不能反向依赖 ViewModel 或 View';
       } else if (sourceRole == 'view_model' && targetRole == 'view') {
         reason = 'ViewModel 不能依赖 View';
-      } else if (sourceRole == 'view' && targetRole == 'repository') {
-        reason = 'View 应通过 ViewModel 发命令，不能直接调用 Repository';
+      } else if (sourceRole == 'view' &&
+          const {'repository', 'application'}.contains(targetRole)) {
+        reason = 'View 应通过 ViewModel 发命令，不能直接调用 Repository 或 Application';
       } else if ((sourceRole == 'view' || sourceRole == 'view_model') &&
           (forbiddenInfrastructurePackages.any(uri.startsWith) ||
               _isInfrastructureTarget(target, libRoot))) {
         reason = 'View/ViewModel 不能绕过 Repository 直接依赖网络、数据库或存储';
-      } else if (sourceRole == 'repository' &&
+      } else if ((sourceRole == 'repository' || sourceRole == 'application') &&
           (uri == 'package:flutter/material.dart' ||
               uri == 'package:flutter/widgets.dart')) {
-        reason = 'Repository 不能依赖 Flutter UI';
+        reason = 'Repository/Application 不能依赖 Flutter UI';
       }
 
       if (reason != null) {
@@ -166,7 +250,7 @@ List<String> _findMvvmLayerViolations(
 String? _featureRole(String filePath, String libRoot) {
   final segments = p.split(p.relative(filePath, from: libRoot));
   if (segments.length < 4 || segments.first != 'features') return null;
-  const roles = {'model', 'repository', 'view_model', 'view'};
+  const roles = {'model', 'repository', 'application', 'view_model', 'view'};
   return roles.contains(segments[2]) ? segments[2] : null;
 }
 
@@ -237,6 +321,9 @@ String? _resolveLocalUri(
 _Module _moduleOf(String filePath, String libRoot) {
   final segments = p.split(p.relative(filePath, from: libRoot));
   if (segments.first == 'core') return const _Module(_Layer.core);
+  // gen_l10n 生成的资源只负责把消息键映射为当前语言，不包含 App 组合或业务逻辑。
+  // 将 l10n 视为 shared 展示资源后，UserMessage 可以在不依赖 app 层的前提下解析文案。
+  if (segments.first == 'l10n') return const _Module(_Layer.shared);
   if (segments.first == 'shared') return const _Module(_Layer.shared);
   if (segments.first == 'features' && segments.length > 1) {
     return _Module(_Layer.feature, segments[1]);

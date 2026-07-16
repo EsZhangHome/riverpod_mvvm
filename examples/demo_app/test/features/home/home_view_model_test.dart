@@ -2,9 +2,9 @@
 // HomeNotifier 基础成功路径测试：通过 ProviderContainer override 注入 Fake，
 // 不挂载页面，也不访问网络。
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import 'package:riverpod_mvvm_demo/features/home/home_providers.dart';
 import 'package:riverpod_mvvm_demo/features/home/model/home_banner.dart';
 import 'package:riverpod_mvvm_demo/features/home/repository/home_repository.dart';
@@ -12,7 +12,9 @@ import 'package:riverpod_mvvm_demo/features/home/view_model/home_view_model.dart
 
 class FakeHomeRepository implements HomeRepository {
   @override
-  Future<List<HomeBanner>> fetchBanners({CancelToken? cancelToken}) async {
+  Future<List<HomeBanner>> fetchBanners({
+    RequestCancellationToken? cancelToken,
+  }) async {
     return const [HomeBanner(id: '1', title: 'Fake Banner', imageUrl: '')];
   }
 }

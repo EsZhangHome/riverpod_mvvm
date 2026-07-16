@@ -164,7 +164,8 @@ class _AppViewState extends ConsumerState<_AppView> {
 
       // builder 位于 MaterialApp 提供的 Theme、ScaffoldMessenger 和本地化环境内。
       // 网络监听因此可以使用统一 AppToast，但 child（Router）仍被原样返回，不改变
-      // 导航层级。连接状态和请求质量都由 Riverpod Provider 注入，测试可完全替换。
+      // 导航层级。系统连接状态由 Riverpod Provider 注入，测试可完全替换。这里不再
+      // 根据接口耗时推断弱网，避免把服务端计算慢错误提示成用户网络差。
       builder: (context, child) {
         return AppNetworkFeedback(
           navigatorKey: _navigatorKey,

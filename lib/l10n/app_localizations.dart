@@ -116,6 +116,120 @@ abstract class AppLocalizations {
   /// **'重试'**
   String get retry;
 
+  /// No description provided for @login.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录'**
+  String get login;
+
+  /// No description provided for @account.
+  ///
+  /// In zh, this message translates to:
+  /// **'手机号/邮箱'**
+  String get account;
+
+  /// No description provided for @password.
+  ///
+  /// In zh, this message translates to:
+  /// **'密码'**
+  String get password;
+
+  /// No description provided for @enterAccount.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入手机号或邮箱'**
+  String get enterAccount;
+
+  /// No description provided for @enterPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入密码'**
+  String get enterPassword;
+
+  /// No description provided for @backHome.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回首页'**
+  String get backHome;
+
+  /// No description provided for @noData.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无数据'**
+  String get noData;
+
+  /// No description provided for @pageNotFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'页面不存在'**
+  String get pageNotFound;
+
+  /// No description provided for @requestTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求超时，请稍后重试'**
+  String get requestTimeout;
+
+  /// No description provided for @requestCanceled.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求已取消'**
+  String get requestCanceled;
+
+  /// No description provided for @networkError.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络连接异常'**
+  String get networkError;
+
+  /// No description provided for @unknownError.
+  ///
+  /// In zh, this message translates to:
+  /// **'未知错误，请稍后重试'**
+  String get unknownError;
+
+  /// No description provided for @serverError.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务器异常，请稍后重试'**
+  String get serverError;
+
+  /// No description provided for @requestFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'请求失败，请稍后重试'**
+  String get requestFailed;
+
+  /// No description provided for @sessionExpired.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录状态已失效，请重新登录'**
+  String get sessionExpired;
+
+  /// No description provided for @permissionDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无权限执行此操作'**
+  String get permissionDenied;
+
+  /// No description provided for @validationFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'提交内容校验失败'**
+  String get validationFailed;
+
+  /// No description provided for @storageError.
+  ///
+  /// In zh, this message translates to:
+  /// **'本地数据处理失败'**
+  String get storageError;
+
+  /// No description provided for @protocolError.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务响应格式异常'**
+  String get protocolError;
+
   /// No description provided for @networkDisconnected.
   ///
   /// In zh, this message translates to:
@@ -127,18 +241,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'网络连接已恢复'**
   String get networkRestored;
-
-  /// No description provided for @networkPoor.
-  ///
-  /// In zh, this message translates to:
-  /// **'当前网络较慢，正在尝试重新连接'**
-  String get networkPoor;
-
-  /// No description provided for @networkQualityRestored.
-  ///
-  /// In zh, this message translates to:
-  /// **'网络状况已恢复'**
-  String get networkQualityRestored;
 }
 
 class _AppLocalizationsDelegate

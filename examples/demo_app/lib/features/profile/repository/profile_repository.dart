@@ -5,19 +5,18 @@
 // Mock 开关：通过 EnvConfig.enableMock 控制。
 // Profile 是保留的未来功能示例，依然遵循 ViewModel -> Repository -> ApiService。
 
-import 'package:dio/dio.dart';
-
 import 'package:riverpod_mvvm/core/config/env_config.dart';
 import 'package:riverpod_mvvm/core/network/api_service.dart';
 import 'package:riverpod_mvvm/core/network/api_exception.dart';
+import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import '../../../core/demo_endpoints.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
 
 abstract class ProfileRepository {
-  /// fallbackUser 让 Mock/弱网场景可以复用当前会话中的基础资料。
+  /// fallbackUser 让 Mock 或详情请求失败场景可以复用当前会话中的基础资料。
   Future<UserModel> fetchProfile(
     UserModel fallbackUser, {
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
   });
 }
 
@@ -29,7 +28,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
   @override
   Future<UserModel> fetchProfile(
     UserModel fallbackUser, {
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
   }) async {
     // 编译期开关决定数据源，页面不写 if/else。
     if (EnvConfig.enableMock) {
@@ -44,7 +43,7 @@ class ProfileRepositoryImpl implements ProfileRepository {
     return fallbackUser;
   }
 
-  Future<UserModel> _apiProfile({CancelToken? cancelToken}) async {
+  Future<UserModel> _apiProfile({RequestCancellationToken? cancelToken}) async {
     // ApiService 负责解析，Repository 负责拒绝成功响应中的空业务数据。
     final response = await _apiService.get<UserModel>(
       DemoEndpoints.profile,

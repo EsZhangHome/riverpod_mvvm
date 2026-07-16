@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import 'package:riverpod_mvvm_demo/localization/demo_strings.dart';
 import 'package:riverpod_mvvm_demo/features/orders/model/order.dart';
 import 'package:riverpod_mvvm_demo/features/orders/repository/order_repository.dart';
@@ -22,7 +22,8 @@ class _FakeOrderRepository implements OrderRepository {
   final Completer<Order>? detailCompleter;
   final StreamController<OrderStatus>? statusController;
   final Map<String, int> detailRequestCount = {};
-  final Completer<CancelToken> detailRequestStarted = Completer<CancelToken>();
+  final Completer<RequestCancellationToken> detailRequestStarted =
+      Completer<RequestCancellationToken>();
 
   final List<Order> _orders = [
     Order(
@@ -52,7 +53,7 @@ class _FakeOrderRepository implements OrderRepository {
   Future<OrderPageResult> fetchOrders({
     required int page,
     int pageSize = 3,
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
   }) async {
     // 固定分成两页，让测试不依赖生产 Repository 的分页算法。
     if (page == 1) {
@@ -65,7 +66,7 @@ class _FakeOrderRepository implements OrderRepository {
   }
 
   @override
-  Future<Order> createOrder({CancelToken? cancelToken}) async {
+  Future<Order> createOrder({RequestCancellationToken? cancelToken}) async {
     final created = Order(
       id: 'created-1',
       title: '新建订单',
@@ -78,7 +79,10 @@ class _FakeOrderRepository implements OrderRepository {
   }
 
   @override
-  Future<Order> cancelOrder(String id, {CancelToken? cancelToken}) async {
+  Future<Order> cancelOrder(
+    String id, {
+    RequestCancellationToken? cancelToken,
+  }) async {
     if (cancelCompleter case final completer?) {
       return completer.future;
     }
@@ -90,7 +94,10 @@ class _FakeOrderRepository implements OrderRepository {
   }
 
   @override
-  Future<Order> fetchOrder(String id, {CancelToken? cancelToken}) async {
+  Future<Order> fetchOrder(
+    String id, {
+    RequestCancellationToken? cancelToken,
+  }) async {
     detailRequestCount.update(id, (count) => count + 1, ifAbsent: () => 1);
     if (detailCompleter case final completer?) {
       if (!detailRequestStarted.isCompleted) {
@@ -309,7 +316,7 @@ void main() {
     expect(repository.detailRequestCount['active-1'], 2);
   });
 
-  test('详情请求未完成时最后一个监听离开会取消 CancelToken', () async {
+  test('详情请求未完成时最后一个监听离开会取消请求令牌', () async {
     final repository = _FakeOrderRepository(
       detailCompleter: Completer<Order>(),
     );
@@ -352,4 +359,4 @@ void main() {
 }
 
 // 订单 Provider 综合测试：Fake Repository 可精确控制 Future/Stream 完成时机，
-// 用于复现分页与创建并发、乐观取消与远端事件竞态、TTL 和 CancelToken 生命周期。
+// 用于复现分页与创建并发、乐观取消与远端事件竞态、TTL 和取消令牌生命周期。

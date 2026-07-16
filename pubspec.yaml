@@ -55,6 +55,10 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # integration_test 驱动真实 Flutter App 生命周期，用于验证跨 Provider、路由与页面的
+  # 完整流程；它不替代快速单元测试，也不应连接不稳定的外部测试环境。
+  integration_test:
+    sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

@@ -8,11 +8,13 @@
 底座已经提供：
 
 - Riverpod 3 依赖注入、App 级状态与 MVVM 业务状态组织方式。
+- 只在跨 Repository/全局状态编排时使用的 Application 用例层，以及通过抽象端口连接实现的示例。
 - GoRouter 登录守卫、安全深链回跳、可注入业务路由包和可整体删除的 Starter 组件。
 - 首帧前关键启动、首帧后后台预热、失败重试与配置阻断。
-- Dio 抽象、响应协议适配、请求 ID、幂等键、重试、取消、上传下载、全局网络监听与真实请求弱网判断。
+- Dio 抽象、响应协议适配、请求 ID、幂等键、重试、取消、上传下载与系统网络连接监听。
 - 完整会话安全存储、旧会话迁移、可插拔刷新令牌、并发 401 单次刷新与失败退出。
-- SQLite 迁移、普通存储、安全存储、网络状态、权限和 App 信息抽象。
+- SQLite 迁移、可注入普通偏好、安全存储、网络状态、权限和 App 信息抽象。
+- AppFailure 统一异常分类、根因/堆栈保留、安全用户提示与低噪音非致命上报。
 - 可替换日志、崩溃与性能上报后端、ARB 国际化入口，以及支持上/中/下位置的公共 AppToast 和带操作的 AppSnackBar。
 - 模块依赖、MVVM 分层和循环依赖自动检查、覆盖率门禁与 GitHub Actions CI。
 
@@ -193,7 +195,16 @@ final result = await apiService.post<Order>(
 
 写操作只有在后端支持幂等键时才应打开网络重试。支付、建单等敏感写操作即使刷新 Token 成功，也不应
 自动重放，所以同时设置 `RequestReplayPolicy.never`。上传下载由底座强制禁止重放。页面或 Provider 销毁时
-应取消 `CancelToken`。
+应取消同一次请求的 `RequestCancellationToken`。Dio `CancelToken` 只在 ApiClient 内部适配，不能出现在
+Repository、Application、ViewModel 或 View 中。
+
+`allowRetry: true` 与非空 `idempotencyKey` 对写请求缺一不可。底座组合测试会让请求真实经过 Token、401、
+重放和 Retry 拦截器，验证并发 401 只刷新一次、晚到的旧 Token 请求复用新 Token、never 请求不重放，以及
+幂等写请求重试时 key 保持不变。新增签名或缓存拦截器后，也应把它加入组合测试，不要只测孤立方法。
+
+缓存也必须由业务显式选择：短时复用使用 `MemoryCachePolicy<T>`；需要跨重启保留的非敏感 JSON 快照使用
+`DatabaseCachePolicy<T>`。后者默认不注册 Provider、不自动缓存请求。cacheKey 含用户数据时必须加入
+tenantId/userId；Token、密码仍使用安全存储；复杂离线领域数据建立独立表，不要把 `app_cache` 当万能数据库。
 
 ## 7. 会话刷新
 
@@ -223,7 +234,21 @@ class ProjectSessionRefresher implements SessionRefresher {
 旧版 `auth_token + current_user` 迁移，迁移成功或退出登录后会清除旧数据。新项目不要再用
 SharedPreferences 保存 token，也不要在登录页源码中放默认账号或密码。
 
-## 8. 日志、监控与隐私
+## 8. 普通偏好、插件边界与异常链路
+
+业务代码通过 `preferencesStoreProvider` 获取 `PreferencesStore`，不要直接调用静态 `LocalStorage`。
+`LocalStorage` 只负责 Bootstrap 前初始化 SharedPreferences，`BootstrappedPreferencesStore` 是默认适配器。
+测试可以 override 内存实现；企业项目也可以替换成自己的配置存储，而不修改主题或认证迁移代码。
+
+架构测试把现有基础设施插件限制在明确目录：Dio、SQLite、SharedPreferences、安全存储、连接状态、权限、
+包信息和图片缓存都不能进入 Repository、Application、ViewModel、View 或独立 Demo。增加新的平台插件时，
+先创建稳定 Service/Repository 端口和单一适配目录，再把该目录加入白名单；不要直接放宽到整个 core。
+
+插件边界统一抛 `AppFailure`：网络、协议、数据库、安全存储和其他平台服务都会保留原始 cause/stack。
+`FailureMessageResolver` 负责用户提示，`FailureObserver` 负责监控筛选。网络断开、业务拒绝和取消不会上报；
+存储、协议和未知平台故障会上报根因。两者职责不能合并，否则容易把技术信息展示给用户或制造告警风暴。
+
+## 9. 日志、监控与隐私
 
 `AppLogger`、`CrashReporter` 和 `AppPerformance` 是稳定入口。接入 Sentry、Firebase Crashlytics、
 Datadog 或公司平台时，实现 `LogSink`、`CrashReportingBackend`、`PerformanceReporter`，通过
@@ -242,11 +267,12 @@ Datadog 或公司平台时，实现 `LogSink`、`CrashReportingBackend`、`Perfo
 性能门面已经记录 Bootstrap、Warmup、SQLite 首次打开、网络请求和 Flutter 帧耗时。指标 attributes 只能放
 方法、路径、状态码等低基数字段，不能放用户 id、订单号、完整 URL；性能 SDK 抛错会被隔离，不会打断业务。
 
-## 9. 本地化
+## 10. 本地化
 
 正式文案写入 `lib/l10n/app_zh.arb`、`app_en.arb`，页面通过
-`AppLocalizations.of(context)` 读取。底座 `AppStrings` 只保留底层状态工具无法通过
-`BuildContext` 读取的通用错误与认证文案，不应继续堆积具体业务字符串。
+`AppLocalizations.of(context)` 读取。ViewModel 没有 `BuildContext` 时，不保存已经翻译好的中文 String，
+而是发布 `UserMessage.localized(UserMessageKey.xxx)`；View 收到后再用当前 `AppLocalizations` 解析。
+后端明确标记为可展示的动态业务文案可使用 `UserMessage.text`，原始异常和技术信息不能直接展示。
 
 修改 ARB 后执行：
 
@@ -254,7 +280,7 @@ Datadog 或公司平台时，实现 `LogSink`、`CrashReportingBackend`、`Perfo
 flutter gen-l10n
 ```
 
-## 10. 发布准备
+## 11. 发布准备
 
 Android 不再使用 debug key 签 release。复制 `android/key.properties.example` 为
 `android/key.properties` 并填写本地或 CI 密钥；真实文件和 keystore 已被 Git 忽略。
@@ -268,11 +294,12 @@ iOS 工程不写死开发团队，签名由 Xcode 或 CI 按项目配置。
 发布前至少执行：
 
 ```bash
-dart format --output=none --set-exit-if-changed lib test tool
+dart format --output=none --set-exit-if-changed lib test integration_test tool
 dart run build_runner build
 flutter analyze
 flutter test --coverage
-dart run tool/check_coverage.dart --minimum 55
+dart run tool/check_coverage.dart --minimum 70
+flutter test integration_test -d <device-id> --dart-define-from-file=config/local.json
 flutter build apk --release --dart-define-from-file=config/local.json
 flutter build ios --release --no-codesign --dart-define-from-file=config/local.json
 ```
@@ -282,10 +309,10 @@ flutter build ios --release --no-codesign --dart-define-from-file=config/local.j
 - production API、隐私政策、权限文案、图标、启动图和版本号。
 - 使用默认 `lib/main.dart` 构建；Mock / 调试日志 / Charles 全部关闭。
 - 数据库 migration 能从线上最老受支持版本升级。
-- 登录过期、弱网、离线、重复提交、应用切后台和低内存恢复路径。
+- 登录过期、离线、连接超时、重复提交、应用切后台和低内存恢复路径。
 - 崩溃、性能、接口 requestId 和关键业务埋点可在生产平台追踪。
 
-## 11. CI 与合并门禁
+## 12. CI 与合并门禁
 
 `.github/workflows/ci.yml` 默认执行：
 
@@ -293,9 +320,10 @@ flutter build ios --release --no-codesign --dart-define-from-file=config/local.j
 2. Dart 格式校验。
 3. build_runner 生成并检查仓库无差异。
 4. `flutter analyze`。
-5. `flutter test --coverage`，并执行 55% 最低覆盖率门禁。
+5. `flutter test --coverage`，并执行 70% 最低覆盖率门禁。
 6. Debug APK 构建。
 7. 独立 Demo 的格式、生成代码、静态分析和测试；删除 Demo 目录后该 Job 自动跳过。
+8. Android 模拟器运行关键 App 集成流程，并真实冒烟验证安全存储与 SQLite 迁移。
 
 团队可在此基础上提高覆盖率阈值，增加 Sonar、依赖漏洞扫描、签名 release 构建与分发平台上传；这些步骤
 依赖组织账号和密钥，因此不在通用底座中硬编码。

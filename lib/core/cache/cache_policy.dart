@@ -5,10 +5,10 @@
 // 设计思路：
 // - Repository 不应该直接操作缓存（SharedPreferences/文件/数据库），
 //   而是通过 CachePolicy 接口读写缓存，方便替换缓存实现。
-// - 当前提供 MemoryCachePolicy 作为示例，后续可以扩展：
-//   - FileCachePolicy：文件缓存，适合大体积数据
-//   - DatabaseCachePolicy：数据库缓存，适合复杂查询
-//   - SharedPrefsCachePolicy：轻量键值缓存，适合简单配置
+// - 当前提供两种按需实现：
+//   - MemoryCachePolicy：进程内短时缓存；
+//   - DatabaseCachePolicy：App 重启后仍存在的简单 JSON 快照。
+// - 复杂查询应建立领域表；大文件应使用文件缓存，不要把通用 app_cache 当万能仓库。
 //
 // 使用示例（在 Repository 中）：
 // ```dart

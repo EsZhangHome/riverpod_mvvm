@@ -1,8 +1,8 @@
 // ProfileNotifier 测试：验证 ViewModel 只编排状态和 Repository，不依赖页面。
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import 'package:riverpod_mvvm/shared/state/view_state.dart';
 import 'package:riverpod_mvvm_demo/features/profile/profile_providers.dart';
 import 'package:riverpod_mvvm_demo/features/profile/repository/profile_repository.dart';
@@ -15,7 +15,7 @@ class _FakeProfileRepository implements ProfileRepository {
   @override
   Future<UserModel> fetchProfile(
     UserModel fallbackUser, {
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
   }) async {
     callCount++;
     return UserModel(
@@ -39,7 +39,7 @@ void main() {
 
     expect(repository.callCount, 0);
     expect(notifier.state.viewState, ViewState.error);
-    expect(notifier.state.errorMessage, isNotEmpty);
+    expect(notifier.state.errorMessage, isNotNull);
   });
 
   test('successful repository result updates profile state', () async {

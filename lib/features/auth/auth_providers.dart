@@ -5,16 +5,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/service_providers.dart';
-import '../../core/storage/local_storage.dart';
 import 'repository/login_repository.dart';
 import 'repository/session_refresher.dart';
 import 'repository/session_store.dart';
 
 /// 登录 Repository 的依赖注入入口。
 ///
-/// [LoginNotifier] watch/read 的是 [LoginRepository] 抽象；这里才决定生产实现使用
-/// [LoginRepositoryImpl]，并把全局 [ApiService] 注入进去。测试可以 override 本
-/// Provider 为 FakeLoginRepository，从而不发真实请求，也不依赖 EnvConfig。
+/// [SignInUseCase] 使用的是 [LoginRepository] 抽象；这里才决定生产实现使用
+/// [LoginRepositoryImpl]，并把全局 [ApiService] 注入进去。用例测试可以替换本
+/// Provider，ViewModel 测试则直接替换更上层的 signInProvider，保持测试职责单一。
 final loginRepositoryProvider = Provider<LoginRepository>((ref) {
   return LoginRepositoryImpl(ref.watch(apiServiceProvider));
 });
@@ -39,11 +38,12 @@ final sessionRefresherProvider = Provider<SessionRefresher>(
 ///
 /// 全新项目不需要关心这两个回调；测试可 override 为纯内存 SessionStore。
 final sessionStoreProvider = Provider<SessionStore>((ref) {
+  final preferences = ref.watch(preferencesStoreProvider);
   return SecureSessionStore(
     ref.watch(secureStorageServiceProvider),
-    readLegacyUserJson: () => LocalStorage.getString('current_user'),
+    readLegacyUserJson: () => preferences.getString('current_user'),
     clearLegacyUser: () async {
-      await LocalStorage.remove('current_user');
+      await preferences.remove('current_user');
     },
   );
 });

@@ -26,8 +26,9 @@ import '../utils/crash_reporter.dart';
 
 /// SharedPreferences 的薄封装。
 ///
-/// 业务层统一使用 LocalStorage 而不是直接操作 SharedPreferences，可以减少以后
-/// 更换实现时的改动范围；但 Hive 等异步模型不同的方案仍可能需要调整本类契约。
+/// 本类现在是 Bootstrap 与默认 PreferencesStore 适配器使用的插件边界。业务
+/// Provider 不应直接调用静态方法，而应依赖 preferencesStoreProvider；这样不同
+/// ProviderContainer 可以注入独立 Fake，替换存储也不会修改业务代码。
 ///
 /// 使用方式：
 /// ```dart

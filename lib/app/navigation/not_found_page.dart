@@ -13,7 +13,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../shared/localization/app_strings.dart';
+import '../../l10n/app_localizations.dart';
 import '../../shared/navigation/route_paths.dart';
 
 /// 404 页面：路由匹配失败时展示。
@@ -33,20 +33,21 @@ class NotFoundPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = AppLocalizations.of(context);
     return Scaffold(
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // 404 提示文案
-            const Text(AppStrings.pageNotFound),
+            Text(strings.pageNotFound),
             const SizedBox(height: 16),
             // 先进入登录路由：未登录用户停留在登录页；已登录用户会被
             // AuthRouteGuard 重定向到当前路由包的 authenticatedHome。
             // 因此 404 页面不需要依赖任何项目的具体业务首页。
             ElevatedButton(
               onPressed: () => context.go(fallbackPath),
-              child: const Text(AppStrings.backHome),
+              child: Text(strings.backHome),
             ),
           ],
         ),

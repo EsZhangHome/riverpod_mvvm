@@ -5,28 +5,30 @@
 // Mock 开关：通过 EnvConfig.enableMock 控制，`flutter run --dart-define=ENV_ENABLE_MOCK=false` 切换到真实接口。
 //
 // 登录数据流：
-// LoginNotifier -> LoginRepository.login -> Mock 或 ApiService
-// -> LoginResponse -> LoginNotifier -> AuthNotifier 持久化会话。
-
-import 'package:dio/dio.dart';
+// SignInUseCase -> LoginRepository.login -> Mock 或 ApiService
+// -> LoginResponse -> SignInUseCase -> SessionActivator 建立会话。
 
 import '../../../core/config/env_config.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/api_exception.dart';
+import '../../../core/network/request_cancellation.dart';
 import 'auth_endpoints.dart';
 import '../model/login_request.dart';
 import '../model/login_response.dart';
 
-/// 登录数据源契约。ViewModel 依赖接口，测试可以注入 Fake Repository。
+/// 登录数据源契约。应用用例依赖接口，测试可以注入 Fake Repository。
 abstract class LoginRepository {
   /// 校验凭据并返回登录结果。
   ///
-  /// - [request]：已由 ViewModel 完成空值校验的账号密码请求对象；
+  /// - [request]：已由登录 ViewModel 完成空值校验的账号密码请求对象；
   /// - [cancelToken]：从页面级请求处理器透传，页面销毁时可中止真实 Dio 请求。
   ///
   /// 成功返回包含 token/user 的 [LoginResponse]；失败抛出统一网络/业务异常，由
   /// AsyncRequestHandler 映射为用户文案。Repository 不返回 ViewState，也不弹提示。
-  Future<LoginResponse> login(LoginRequest request, {CancelToken? cancelToken});
+  Future<LoginResponse> login(
+    LoginRequest request, {
+    RequestCancellationToken? cancelToken,
+  });
 }
 
 /// 根据编译环境在 Mock 与真实接口之间切换的 Repository 实现。
@@ -43,7 +45,7 @@ class LoginRepositoryImpl implements LoginRepository {
   @override
   Future<LoginResponse> login(
     LoginRequest request, {
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
   }) async {
     // 步骤 1：开发环境走可重复运行的本地 Mock，不依赖后端。
     if (EnvConfig.enableMock) {
@@ -72,7 +74,7 @@ class LoginRepositoryImpl implements LoginRepository {
 
   Future<LoginResponse> _apiLogin(
     LoginRequest request, {
-    CancelToken? cancelToken,
+    RequestCancellationToken? cancelToken,
   }) async {
     // ApiService 统一处理基础地址、状态码、异常映射和 JSON 转换。
     final response = await _apiService.post<LoginResponse>(

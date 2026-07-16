@@ -4,6 +4,8 @@
 
 import 'dart:convert';
 
+import '../../../core/errors/app_failure.dart';
+import '../../../core/errors/storage_exception.dart';
 import '../../../core/storage/secure_storage_service.dart';
 import '../model/auth_session.dart';
 import '../model/user_model.dart';
@@ -64,7 +66,12 @@ class SecureSessionStore implements SessionStore {
   /// 返回 null 只表示没有可恢复会话。JSON 格式损坏会抛异常，由 AuthNotifier 上报并
   /// 清理，避免把数据损坏悄悄伪装成正常退出而失去诊断线索。
   @override
-  Future<AuthSession?> read() async {
+  Future<AuthSession?> read() {
+    return _guard('Stored auth session read failed', _read);
+  }
+
+  /// 真正的恢复与旧数据迁移流程；公开方法只负责建立统一异常边界。
+  Future<AuthSession?> _read() async {
     final value = await _storage.read(_sessionKey);
     if (value != null && value.isNotEmpty) {
       final json = jsonDecode(value);
@@ -101,14 +108,19 @@ class SecureSessionStore implements SessionStore {
   /// 将 token 与 user 编码成同一个 JSON 字符串后写入单一安全 key。
   @override
   Future<void> write(AuthSession session) {
-    return _storage.write(_sessionKey, jsonEncode(session.toJson()));
+    return _guard(
+      'Stored auth session write failed',
+      () => _storage.write(_sessionKey, jsonEncode(session.toJson())),
+    );
   }
 
   /// 同时删除当前完整会话与旧版残留凭据。
   @override
-  Future<void> clear() async {
-    // 退出时同时清理旧 key，确保从早期版本升级的设备不残留有效凭据。
-    await Future.wait([_storage.delete(_sessionKey), _clearLegacy()]);
+  Future<void> clear() {
+    return _guard('Stored auth session clear failed', () async {
+      // 退出时同时清理旧 key，确保从早期版本升级的设备不残留有效凭据。
+      await Future.wait([_storage.delete(_sessionKey), _clearLegacy()]);
+    });
   }
 
   Future<void> _clearLegacy() async {
@@ -116,5 +128,18 @@ class SecureSessionStore implements SessionStore {
       _storage.delete(_legacyTokenKey),
       if (_clearLegacyUser != null) _clearLegacyUser(),
     ]);
+  }
+
+  /// 认证模块自己的 Fake 也可能抛普通异常，因此在 SessionStore 公共出口再守一次。
+  /// 已经由安全存储转换过的 AppFailure 原样上抛，避免重复包装；JSON 损坏、旧迁移
+  /// 回调或测试实现的异常统一归为 storage，并保留最初 cause/stack。
+  Future<T> _guard<T>(String message, Future<T> Function() action) async {
+    try {
+      return await action();
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error, stackTrace) {
+      throw StorageException(message, cause: error, stackTrace: stackTrace);
+    }
   }
 }

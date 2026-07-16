@@ -15,7 +15,7 @@ class LoginResponse {
   /// 创建已通过后端成功校验的登录结果。
   ///
   /// - [token]：后续接口使用的访问令牌，Repository 应确保不是空字符串；
-  /// - [user]：该令牌对应的用户信息，必须与 token 一起交给 AuthNotifier 原子保存。
+  /// - [user]：该令牌对应的用户信息，必须与 token 一起由登录用例组成 AuthSession。
   const LoginResponse({required this.token, required this.user});
 
   /// 鉴权令牌。属于敏感字段，禁止把完整对象写入生产日志。

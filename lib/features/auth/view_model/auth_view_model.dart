@@ -5,7 +5,9 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errors/failure_observer.dart';
 import '../../../core/utils/crash_reporter.dart';
+import '../application/session_activator.dart';
 import '../auth_providers.dart';
 import '../model/auth_session.dart';
 import '../model/user_model.dart';
@@ -65,7 +67,7 @@ class AuthState {
 /// - 登录：完整会话写入成功才更新内存状态；
 /// - 刷新：新 token 持久化成功后才让请求重放；
 /// - 退出：立即清内存，再尽力清安全存储并上报失败。
-class AuthNotifier extends Notifier<AuthState> {
+class AuthNotifier extends Notifier<AuthState> implements SessionActivator {
   /// 创建初始恢复状态，并把安全存储读取安排到当前同步构建结束后的微任务。
   ///
   /// `build` 不能标记 async，因为 AuthState 本身已经显式表示 restoring；如果改用
@@ -94,7 +96,7 @@ class AuthNotifier extends Notifier<AuthState> {
     try {
       await ref.read(sessionStoreProvider).write(refreshed);
     } catch (error, stack) {
-      CrashReporter.report(error, stack);
+      FailureObserver.reportIfNeeded(error, stack);
       return null;
     }
     if (!ref.mounted) return null;
@@ -115,11 +117,11 @@ class AuthNotifier extends Notifier<AuthState> {
       CrashReporter.setContext('userId', session.user.id);
     } catch (error, stack) {
       // 损坏或旧版本会话不能继续使用。先尝试清除，避免每次启动重复解析失败。
-      CrashReporter.report(error, stack);
+      FailureObserver.reportIfNeeded(error, stack);
       try {
         await store.clear();
       } catch (clearError, clearStack) {
-        CrashReporter.report(clearError, clearStack);
+        FailureObserver.reportIfNeeded(clearError, clearStack);
       }
       if (ref.mounted) state = const AuthState.unauthenticated();
     }
@@ -127,23 +129,23 @@ class AuthNotifier extends Notifier<AuthState> {
 
   /// 保存登录成功得到的完整会话。
   ///
-  /// - [token]：LoginRepository 返回的 access token；
-  /// - [user]：同一响应返回的用户模型。
+  /// [session] 已由登录用例将同一次响应中的 token 与用户组合完成。本方法只负责
+  /// 会话生命周期：先持久化，成功后再发布 AuthState。
   ///
   /// 只有安全存储写入成功且 Provider 仍存活时才更新 state，并返回 true。false 表示
   /// 会话没有可靠保存，调用方应留在登录页并展示错误，不能先跳首页再补写凭据。
-  Future<bool> loginSuccess(String token, UserModel user) async {
-    final session = AuthSession(token: token, user: user);
+  @override
+  Future<bool> activateSession(AuthSession session) async {
     try {
       await ref.read(sessionStoreProvider).write(session);
     } catch (error, stack) {
-      CrashReporter.report(error, stack);
+      FailureObserver.reportIfNeeded(error, stack);
       return false;
     }
     if (!ref.mounted) return false;
 
     state = AuthState.authenticated(session);
-    CrashReporter.setContext('userId', user.id);
+    CrashReporter.setContext('userId', session.user.id);
     return true;
   }
 
@@ -158,11 +160,11 @@ class AuthNotifier extends Notifier<AuthState> {
     try {
       await store.clear();
     } catch (error, stack) {
-      CrashReporter.report(error, stack);
+      FailureObserver.reportIfNeeded(error, stack);
       try {
         await store.clear();
       } catch (retryError, retryStack) {
-        CrashReporter.report(retryError, retryStack);
+        FailureObserver.reportIfNeeded(retryError, retryStack);
       }
     }
   }

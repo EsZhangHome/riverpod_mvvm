@@ -5,7 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/storage/local_storage.dart';
+import '../../core/providers/service_providers.dart';
 import 'app_theme.dart';
 
 // ==================== 状态类 ====================
@@ -56,10 +56,10 @@ class ThemeNotifier extends Notifier<ThemeState> {
 
   @override
   ThemeState build() {
-    // LocalStorage 已由 BootstrapGate 尝试初始化，而且读取 API 是同步的。
+    // 默认 PreferencesStore 已由 BootstrapGate 尝试初始化，而且读取 API 是同步的。
     // 直接用持久化结果构造首个 State，可以避免 App 先显示浅色再闪到深色；
-    // 存储降级时 getString 返回 null，主题安全回退到 light。
-    final savedMode = LocalStorage.getString(_themeKey);
+    // 测试或项目壳可以 override Provider，不需要改 ThemeNotifier。
+    final savedMode = ref.watch(preferencesStoreProvider).getString(_themeKey);
     return ThemeState(
       themeMode: savedMode == 'dark' ? ThemeMode.dark : ThemeMode.light,
       lightTheme: AppTheme.light(),
@@ -69,8 +69,8 @@ class ThemeNotifier extends Notifier<ThemeState> {
 
   /// 在 light 与 dark 之间切换，并把选择保存到本地。
   ///
-  /// 内存 state 先更新，界面立即响应；随后异步持久化。LocalStorage 降级实现不会抛
-  /// 出未初始化错误。当前底座不切到 ThemeMode.system，如需“跟随系统”应增加一个
+  /// 内存 state 先更新，界面立即响应；随后通过可注入 PreferencesStore 持久化。
+  /// 默认降级实现不会抛未初始化错误。当前底座不切到 ThemeMode.system，如需增加
   /// 明确设置方法，而不是让 toggle 的三态循环难以预测。
   Future<void> toggleTheme() async {
     final newMode = state.themeMode == ThemeMode.light
@@ -78,10 +78,9 @@ class ThemeNotifier extends Notifier<ThemeState> {
         : ThemeMode.light;
     state = state.copyWith(themeMode: newMode);
 
-    await LocalStorage.setString(
-      _themeKey,
-      newMode == ThemeMode.dark ? 'dark' : 'light',
-    );
+    await ref
+        .read(preferencesStoreProvider)
+        .setString(_themeKey, newMode == ThemeMode.dark ? 'dark' : 'light');
   }
 }
 
