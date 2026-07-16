@@ -31,6 +31,7 @@ import '../database/sqlite_database_service.dart';
 import '../network/api_client.dart';
 import '../network/api_service.dart';
 import '../network/network_status_service.dart';
+import '../network/network_quality_monitor.dart';
 import '../network/response_adapter.dart';
 import '../permission/permission_service.dart';
 import '../storage/secure_storage_service.dart';
@@ -50,7 +51,10 @@ final responseAdapterProvider = Provider<ResponseAdapter>(
 /// ref.onDispose 关闭 Dio。测试可 override 成注入 MockAdapter 的 ApiClient。
 /// 业务 Repository 不应直接读取本 Provider，应依赖下面的 apiServiceProvider。
 final apiClientProvider = Provider<ApiClient>((ref) {
-  final client = ApiClient(responseAdapter: ref.watch(responseAdapterProvider));
+  final client = ApiClient(
+    responseAdapter: ref.watch(responseAdapterProvider),
+    networkQualityMonitor: ref.watch(networkQualityMonitorProvider),
+  );
   ref.onDispose(client.close);
   return client;
 });
@@ -93,6 +97,44 @@ final databaseServiceProvider = Provider<DatabaseService>(
 final networkStatusServiceProvider = Provider<NetworkStatusService>(
   (ref) => ConnectivityNetworkStatusService(),
 );
+
+/// App 级连接状态流：先查询当前网络，再持续监听平台连接类型变化。
+///
+/// 它和 [networkStatusServiceProvider] 的区别：Service 是可替换的平台能力，当前
+/// Provider 才是 View/ViewModel 直接消费的 Riverpod 状态。这里不使用 autoDispose，
+/// 因为 MyApp 会在整个应用生命周期监听它；Provider 本身仍是惰性的，没人读取时不会
+/// 创建 connectivity_plus 监听，ProviderContainer 销毁时 Stream 也会自动取消。
+final networkStatusProvider = StreamProvider<NetworkStatus>((ref) async* {
+  final service = ref.watch(networkStatusServiceProvider);
+  var previous = await service.getCurrentStatus();
+  yield previous;
+  // 插件在部分系统上会把“当前值”作为监听首值再次发送，也可能连续发送相同类型。
+  // 手工与 getCurrentStatus 的首值比较，才能过滤查询结果与监听流之间的重复事件；
+  // 只对 watchStatus 调用 distinct 无法跨越两个 Stream 片段去重。
+  await for (final next in service.watchStatus()) {
+    if (next == previous) continue;
+    previous = next;
+    yield next;
+  }
+});
+
+/// 真实接口网络质量监控器。
+///
+/// ApiClient 和 App 根监听读取的是同一个实例：前者写入请求样本，后者只监听事件。
+/// 具体项目可 override 本 Provider 调整慢请求阈值，而不修改 ApiClient。
+final networkQualityMonitorProvider = Provider<NetworkQualityMonitor>((ref) {
+  final monitor = NetworkQualityMonitor();
+  ref.onDispose(monitor.dispose);
+  return monitor;
+});
+
+/// 把纯 Dart Monitor 的广播流转换成 Riverpod AsyncValue。
+///
+/// 这里只发送质量跨级事件，不持续保存每次请求耗时，避免网络请求导致 Widget 高频
+/// 重建。详细耗时仍由 AppPerformance 负责记录和上报。
+final networkQualityEventsProvider = StreamProvider<NetworkQualityEvent>((ref) {
+  return ref.watch(networkQualityMonitorProvider).events;
+});
 
 /// 权限服务（在当前 ProviderContainer 内共享）。
 ///

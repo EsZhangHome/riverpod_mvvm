@@ -15,6 +15,7 @@ import '../../../core/config/env_config.dart';
 import '../../../shared/state/view_state.dart';
 import '../../../shared/localization/app_strings.dart';
 import '../../../shared/theme/app_spacing.dart';
+import '../../../shared/ui/app_toast.dart';
 import '../../../shared/ui/state_view.dart';
 import '../view_model/auth_view_model.dart';
 import '../view_model/login_view_model.dart';
@@ -57,6 +58,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   /// TextEditingController 保存在 State 中，不会因重建而丢失用户输入。
   @override
   Widget build(BuildContext context) {
+    // listen 负责一次性 UI 副作用，不参与页面布局：
+    // - Notifier 只发布安全文案和递增 feedbackId，不依赖 BuildContext；
+    // - View 收到新 id 后调用 AppToast；
+    // - 相同错误连续发生时 id 仍会变化，所以每次点击都能得到反馈；
+    // - 不使用 fireImmediately，页面重建或重新挂载时不会重复播放旧提示。
+    ref.listen(
+      loginProvider.select(
+        (state) => (id: state.feedbackId, message: state.errorMessage),
+      ),
+      (previous, next) {
+        if (next.id == 0 || next.id == previous?.id) return;
+        AppToast.showError(context, next.message);
+      },
+    );
+
     // watch 建立订阅：ViewState 或错误文案变化时页面自动重建。
     final state = ref.watch(loginProvider);
 
@@ -64,8 +80,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       appBar: AppBar(title: const Text(AppStrings.login)),
       body: StateView(
         state: state.viewState,
-        errorMessage: state.errorMessage,
         // overlay 保留表单内容，只在提交期间盖一层 loading，避免界面闪烁。
+        // 登录的校验/请求错误不会进入 ViewState.error，而是由上方 ref.listen 显示
+        // Toast，因此发生错误后两个输入框仍留在屏幕上，用户可以立即修改并重试。
         loadingStyle: LoadingStyle.overlay,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),

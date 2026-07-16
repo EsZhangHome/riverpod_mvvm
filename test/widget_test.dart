@@ -7,6 +7,7 @@ import 'package:riverpod_mvvm/app/app.dart';
 import 'package:riverpod_mvvm/app/navigation/app_route_bundle.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
 import 'package:riverpod_mvvm/shared/localization/app_strings.dart';
+import 'package:riverpod_mvvm/shared/ui/error_view.dart';
 
 const _testHomePath = '/test-home';
 
@@ -84,6 +85,29 @@ void main() {
     expect(find.text(AppStrings.pageNotFound), findsNothing);
 
     // 默认 MyApp 只注册底座页面，具体业务路由必须由项目入口显式注入。
+  });
+
+  testWidgets('empty login form shows toast and keeps the form visible', (
+    tester,
+  ) async {
+    final store = _MemorySessionStore(null);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sessionStoreProvider.overrideWithValue(store)],
+        child: MyApp(routeBundle: _createTestRouteBundle()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(ElevatedButton, AppStrings.login));
+    // 第一次 pump 处理 Provider 更新，第二次推进 Overlay Toast 的进入动画。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text(AppStrings.enterAccount), findsOneWidget);
+    expect(find.byType(TextField), findsNWidgets(2));
+    expect(find.byType(ErrorView), findsNothing);
   });
 
   testWidgets('app does not paint login page while restoring saved session', (

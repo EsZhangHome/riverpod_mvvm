@@ -25,6 +25,8 @@ class AppRouter {
   /// - [guards]：按列表顺序执行的路由守卫。第一个返回非 null 地址的守卫获胜；
   ///   顺序通常应从登录态、租户选择等基础守卫排到更具体的权限守卫。
   /// - [routeBundle]：项目入口提供的业务路由、首页、登录页和保护规则。
+  /// - [navigatorKey]：可选根 Navigator 身份键。MyApp 传入稳定 key，让位于
+  ///   Navigator 外层的 App 级监听也能取得根 Overlay；普通单元测试可以省略。
   ///
   /// AppRouter 构造时就创建 [config]。调用方应在 StatefulWidget 生命周期内只构造
   /// 一次，并在 dispose 时释放 [config]，不能在每次 build 中重新创建。
@@ -32,7 +34,13 @@ class AppRouter {
     required Listenable refreshListenable,
     required List<RouteGuard> guards,
     required AppRouteBundle routeBundle,
-  }) : config = _createRouter(refreshListenable, guards, routeBundle);
+    GlobalKey<NavigatorState>? navigatorKey,
+  }) : config = _createRouter(
+         refreshListenable,
+         guards,
+         routeBundle,
+         navigatorKey,
+       );
 
   /// 已完成底座路由和业务路由组装的 GoRouter 实例。
   ///
@@ -45,8 +53,11 @@ class AppRouter {
     Listenable refreshListenable,
     List<RouteGuard> guards,
     AppRouteBundle routeBundle,
+    GlobalKey<NavigatorState>? navigatorKey,
   ) {
     return GoRouter(
+      // 不能在 build 中重新创建这个 key，否则导航栈和根 Overlay 都会丢失。
+      navigatorKey: navigatorKey,
       // 普通冷启动明确从“恢复安全会话”开始，而不是先假装进入登录后首页再重定向。
       // GoRouter 默认仍优先使用平台提供的深链地址；守卫会把原地址编码进 returnTo，
       // 恢复/登录完成后再返回目标页面，不会把通知或外部链接丢成首页。

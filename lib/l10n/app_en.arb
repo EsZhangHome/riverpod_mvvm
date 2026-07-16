@@ -7,5 +7,9 @@
       "stages": {"type": "String"}
     }
   },
-  "retry": "Retry"
+  "retry": "Retry",
+  "networkDisconnected": "No network connection. Check your network settings.",
+  "networkRestored": "Network connection restored",
+  "networkPoor": "The network is slow. Trying to reconnect.",
+  "networkQualityRestored": "Network quality restored"
 }

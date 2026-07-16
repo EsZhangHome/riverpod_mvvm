@@ -6,8 +6,9 @@
 // 1. RequestMetadataInterceptor → 补齐 requestId
 // 2. TokenInterceptor           → 请求前自动注入 Authorization header
 // 3. AppLogInterceptor          → 请求/响应/错误时记录脱敏日志
-// 4. UnauthorizedInterceptor   → 捕获 401，协调刷新、重放或通知会话失效
-// 5. RetryInterceptor          → 超时/连接异常时按安全规则重试
+// 4. NetworkQualityInterceptor → 用真实请求样本判断弱网，不额外发送探测请求
+// 5. UnauthorizedInterceptor   → 捕获 401，协调刷新、重放或通知会话失效
+// 6. RetryInterceptor          → 超时/连接异常时按安全规则重试
 //
 // 设计要点：
 // - 拦截器之间通过责任链模式传递，每个拦截器处理完后调用 handler.next()
@@ -22,6 +23,7 @@ import 'package:dio/dio.dart';
 import '../config/env_config.dart';
 import '../performance/performance_reporter.dart';
 import '../utils/logger.dart';
+import 'network_quality_monitor.dart';
 import 'token_refresh_coordinator.dart';
 
 // ==================== 0. 请求追踪 ====================
@@ -168,7 +170,74 @@ class AppLogInterceptor extends Interceptor {
   }
 }
 
-// ==================== 3. 401 会话失效去重守卫 ====================
+// ==================== 3. 网络质量采样 ====================
+
+/// 把真实接口耗时和明确的传输失败交给 [NetworkQualityMonitor]。
+///
+/// 本拦截器只采样，不展示 Toast，也不读取 Riverpod。这样网络层仍然不知道 Widget，
+/// UI 层可通过 Provider 监听 Monitor 事件后决定是否提示用户。
+class NetworkQualityInterceptor extends Interceptor {
+  /// 创建质量采样拦截器；[monitor] 与 ApiClient 处于同一个 ProviderContainer。
+  NetworkQualityInterceptor({required this.monitor});
+
+  /// 接收样本并维护弱网状态的纯 Dart 服务。
+  final NetworkQualityMonitor monitor;
+
+  @override
+  void onResponse(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) {
+    if (response.requestOptions.extra['networkQualityExcluded'] == true) {
+      handler.next(response);
+      return;
+    }
+    final elapsed = _elapsedSinceRequest(response.requestOptions);
+    if (elapsed != null) monitor.recordSuccess(elapsed);
+    handler.next(response);
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    if (err.requestOptions.extra['networkQualityExcluded'] == true) {
+      handler.next(err);
+      return;
+    }
+    // 采用白名单，只把网络传输阶段的失败算作弱网。用户取消、业务响应、证书问题
+    // 或未知编程异常不会触发全局网络提示。
+    switch (err.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+        monitor.recordTransportFailure();
+        break;
+      case DioExceptionType.badCertificate:
+      case DioExceptionType.badResponse:
+      case DioExceptionType.cancel:
+      case DioExceptionType.unknown:
+        break;
+      // Dio 新版本可能增加 transformTimeout 等类型。弱网判断必须采用明确白名单，
+      // 未知的新类型默认忽略，不能在升级依赖后自动变成“网络差”误报。
+      // 根项目当前锁定版本已穷举全部枚举，因此分析器会认为 default 暂时不可达；
+      // 独立 Demo 可解析到更新的兼容版本，这个分支会负责向前兼容。
+      // ignore: unreachable_switch_default
+      default:
+        break;
+    }
+    handler.next(err);
+  }
+
+  Duration? _elapsedSinceRequest(RequestOptions request) {
+    final started = request.extra['requestStartedMicros'];
+    if (started is! int) return null;
+    final elapsedMicros = developer.Timeline.now - started;
+    if (elapsedMicros < 0) return null;
+    return Duration(microseconds: elapsedMicros);
+  }
+}
+
+// ==================== 4. 401 会话失效去重守卫 ====================
 
 /// 401 并发保护器。
 ///
@@ -222,7 +291,7 @@ class UnauthorizedGuard {
   }
 }
 
-// ==================== 4. 401 拦截器 ====================
+// ==================== 5. 401 拦截器 ====================
 
 /// 统一处理 401 未授权错误。
 ///
@@ -313,7 +382,7 @@ class UnauthorizedInterceptor extends Interceptor {
   }
 }
 
-// ==================== 5. 重试拦截器 ====================
+// ==================== 6. 重试拦截器 ====================
 
 /// 对满足幂等条件的超时或连接异常执行有限重试。
 ///

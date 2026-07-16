@@ -55,6 +55,8 @@ void main() {
       );
 
       expect(adapter.requests.single.extra['replayDisabled'], isTrue);
+      // 文件传输时长主要由文件大小决定，不应污染普通 JSON 接口的弱网判断。
+      expect(adapter.requests.single.extra['networkQualityExcluded'], isTrue);
     },
   );
 

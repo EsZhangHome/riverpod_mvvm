@@ -19,6 +19,7 @@ import '../features/auth/auth.dart';
 import '../l10n/app_localizations.dart';
 import '../shared/theme/theme_provider.dart';
 import 'bootstrap/app_warmup.dart';
+import 'network/app_network_feedback.dart';
 import 'navigation/app_route_bundle.dart';
 import 'navigation/app_router.dart';
 import 'navigation/route_guard.dart';
@@ -61,6 +62,13 @@ class _AppView extends ConsumerStatefulWidget {
 }
 
 class _AppViewState extends ConsumerState<_AppView> {
+  /// 根 Navigator 的稳定身份键。
+  ///
+  /// MaterialApp.builder 位于 Navigator 外层，无法通过自己的 BuildContext 向下查找
+  /// Overlay。把同一个 key 交给 GoRouter 和 AppNetworkFeedback 后，全局网络监听可
+  /// 使用与业务页面相同的根 Overlay 展示真正的 AppToast。
+  late final GlobalKey<NavigatorState> _navigatorKey = GlobalKey();
+
   /// 桥接 Riverpod → GoRouter：AuthState 变化时通知 GoRouter 重新执行 redirect
   late final _routerRefresh = _RouterRefreshNotifier();
 
@@ -93,6 +101,7 @@ class _AppViewState extends ConsumerState<_AppView> {
         ),
       ],
       routeBundle: widget.routeBundle,
+      navigatorKey: _navigatorKey,
     ).config;
 
     // fireImmediately 先把 restoring 快照交给回调；它只刷新守卫，不会启动 Warmup。
@@ -152,6 +161,16 @@ class _AppViewState extends ConsumerState<_AppView> {
       themeMode: themeState.themeMode,
 
       routerConfig: _router,
+
+      // builder 位于 MaterialApp 提供的 Theme、ScaffoldMessenger 和本地化环境内。
+      // 网络监听因此可以使用统一 AppToast，但 child（Router）仍被原样返回，不改变
+      // 导航层级。连接状态和请求质量都由 Riverpod Provider 注入，测试可完全替换。
+      builder: (context, child) {
+        return AppNetworkFeedback(
+          navigatorKey: _navigatorKey,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
 
       localizationsDelegates: const [
         AppLocalizations.delegate,

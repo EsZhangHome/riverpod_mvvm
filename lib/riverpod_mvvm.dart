@@ -13,3 +13,7 @@ export 'core/performance/performance_reporter.dart'
     show NoopPerformanceReporter, PerformanceMetric, PerformanceReporter;
 export 'core/utils/crash_reporter.dart' show CrashReportingBackend;
 export 'core/utils/logger.dart' show LogSink;
+// Toast 是少数允许业务 View 和外部壳工程直接使用的稳定 UI 能力。这里只导出统一
+// 入口和类型，不导出 StateView 等项目内部页面骨架，避免公共 API 无限制膨胀。
+export 'shared/ui/app_snack_bar.dart' show AppSnackBar;
+export 'shared/ui/app_toast.dart' show AppToast, AppToastPosition, AppToastType;

@@ -306,7 +306,7 @@ ref.invalidate(appDatabaseProvider);
 | --- | --- | --- |
 | `ref.watch` | 当前对象要随依赖变化而更新 | 页面显示主题、Provider 创建 Repository |
 | `ref.read` | 只执行一次命令，不订阅变化 | 点击按钮调用 `notifier.login()` |
-| `ref.listen` | 状态变化时做一次副作用 | 通知路由器重新执行登录守卫、显示 SnackBar |
+| `ref.listen` | 状态变化时做一次副作用 | 通知路由器重新执行登录守卫、显示 Toast/SnackBar |
 | `select` | 只关心 State 的一个小字段 | 只监听 `currentUser.id`，Token 变化时不重建 |
 
 一个常见错误是在 `build` 中用 `read` 读取本应持续展示的状态。它不会订阅变化，界面自然不会更新。
@@ -316,7 +316,7 @@ ref.invalidate(appDatabaseProvider);
 
 以现有登录页为例：
 
-1. `LoginPage` 用 `ref.watch(loginProvider)` 显示 loading、error 和按钮状态。
+1. `LoginPage` 用 `ref.watch(loginProvider)` 显示 loading 和按钮状态，用 `ref.listen` 消费一次性 Toast。
 2. 点击按钮后用 `ref.read(loginProvider.notifier).login(...)` 发命令。
 3. `LoginNotifier` 先校验表单，再调用 `LoginRepository`。
 4. Repository 根据环境选择 Mock 或 `ApiService`，并透传 CancelToken。
@@ -328,6 +328,12 @@ ref.invalidate(appDatabaseProvider);
 
 为什么登录分成 `LoginNotifier` 和 `AuthNotifier`？登录表单离开页面就可以销毁；用户会话要跨页面、跨路由
 长期存在。把两者混在一起，会让全局状态背上验证码、密码错误、按钮 loading 等页面细节。
+
+登录表单的校验失败、接口失败和会话保存失败属于“可立即修改并重试”的操作结果，不会进入整页
+`ErrorView`。`LoginNotifier` 发布安全错误文案和递增的 `feedbackId`，`LoginPage` 使用 `ref.listen`
+消费一次性事件，再通过 `AppToast` 显示屏幕中部提示。即使连续两次错误文案相同，递增 id 也能确保
+两次都提示；输入框不会被错误页替换。列表首次加载失败等阻断页面内容的错误，仍使用 `StateView`
+和 `ErrorView`，两类场景不要混用。
 
 会话只写入系统安全存储的 `auth_session_v1`，不会再把 token 和用户分别写进两个存储，因而不会出现
 “token 成功、用户失败”的半登录状态。由旧版升级时，`SecureSessionStore` 会在两份旧数据都完整时迁移一次，
@@ -382,6 +388,63 @@ Repository
 `ApiClient` 构造时创建一次，登录或退出只更新回调，不会在请求执行中清空拦截器。网络日志不记录 Header、
 请求体、响应体、URL 用户信息、Query 或 Fragment；后端业务 message 默认也不会直接展示，项目确认其已脱敏
 后才把 `EnvelopeResponseAdapter.trustBusinessMessage` 设为 true。
+
+### 全局网络监听与弱网处理
+
+`networkStatusProvider` 会先读取当前连接类型，再持续监听系统网络变化。`MyApp` 内部的
+`AppNetworkFeedback` 只在以下情况提示：
+
+- 首次查询就是离线，或在线切换到离线：提示检查网络设置。
+- 离线重新变成在线：提示网络连接已恢复。
+- 真实接口发生连接/收发超时，或连续 3 次请求耗时不少于 3 秒：提示当前网络较慢。
+- 弱网后连续 2 次请求快速成功：提示网络状况已恢复。
+
+连接类型不等于互联网一定可用，因此底座不会因为 `connectivity_plus` 报告离线就直接拦截所有请求；
+最终请求结果仍以 Dio 为准。弱网判断也不会启动定时 ping，而是复用真实业务请求样本，避免额外耗电、
+耗流量和探测地址误报。大文件、长轮询等天然慢请求需要在具体项目中排除质量采样。
+
+弱网优化不是“所有请求都自动重试”。底座当前组合使用：连接/收发超时、GET/HEAD 临时错误有限重试、
+1 秒/2 秒退避、写请求幂等白名单、页面销毁 CancelToken、Repository 缓存策略以及全局网络反馈。
+支付、提交订单等非幂等操作仍然禁止自动重试，这是防止重复业务数据的安全边界。
+
+公共 Toast 位于 `lib/shared/ui/app_toast.dart`，所有 View 都可以统一调用：
+
+```dart
+import 'package:riverpod_mvvm/riverpod_mvvm.dart';
+
+AppToast.showInfo(context, '已复制');
+AppToast.showSuccess(context, '保存成功');
+AppToast.showWarning(
+  context,
+  '当前网络较慢',
+  position: AppToastPosition.top,
+);
+AppToast.showError(
+  context,
+  '保存失败',
+  position: AppToastPosition.bottom,
+);
+```
+
+`AppToast` 使用根 `OverlayEntry`，默认 `AppToastPosition.center`，是真正覆盖在页面上的 Android 风格
+短提示，不占用 Scaffold 的 SnackBar 通道。顶部适合网络状态，居中适合表单校验和普通结果，底部适合
+不希望遮挡主要内容的短提示；三种位置都不会拦截页面点击。
+
+Toast 是 View 层能力，不要在 Repository 或 ViewModel 中传入 `BuildContext`。ViewModel 应发布普通消息状态
+或一次性事件，再由 View 使用 `ref.listen` 调用 `AppToast`。如果反馈需要“撤销、重试、查看”等按钮，使用
+独立的 `AppSnackBar`：
+
+```dart
+AppSnackBar.show(
+  context,
+  message: '商品已删除',
+  actionLabel: '撤销',
+  onAction: restoreProduct,
+);
+```
+
+必须确认或做选择时使用 Dialog；需要长期保留并阻断内容时使用页面内提示或 ErrorView。不要为了统一外观
+把这些不同交互全部塞进 Toast。
 
 ## 9. 新增第一个业务模块
 
@@ -557,6 +620,7 @@ flutter test
 | `authenticatedHome` | `app_route_bundle.dart` | 必须与 routes 中真实注册的首页 path 一致 |
 | `allowRetry` | `request_context.dart` | 只声明临时网络错误可重试，不等于允许 401 后重放 |
 | `replayPolicy` | `request_context.dart` | 控制认证刷新后的原请求重放，支付、建单等敏感操作应设 never |
+| `trackNetworkQuality` | `request_context.dart` | 长轮询等天然慢请求设 false，避免污染全局弱网判断；不影响请求本身 |
 | `forceNeverReplay` | `api_client.dart` | 内部保护上传/下载流，调用方不能用 context 绕过 |
 | `fromJson` | `api_service.dart` | 解析响应外壳中的 data，不是解析整个 Dio Response |
 | `readState` | `paginated_handler.dart` | 异步结束时读取最新 State，防止覆盖实时推送或乐观更新 |

@@ -2,7 +2,7 @@
 //
 // 第三站强调“作用域”：
 // - authProvider/themeProvider 是 App 级状态，切换 Tab 或路由后仍然存在；
-// - appInfo/networkStatus 是页面消费的异步服务状态，离开后可自动释放；
+// - appInfo 是页面级异步状态，networkStatus 是底座全 App 共享的连接状态；
 // - View 通过 select 降低对大型全局 State 的依赖。
 //
 // 页面执行顺序：
@@ -18,6 +18,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../localization/demo_strings.dart';
 import 'package:riverpod_mvvm/core/network/network_status_service.dart';
+import 'package:riverpod_mvvm/core/providers/service_providers.dart';
 import 'package:riverpod_mvvm/shared/navigation/route_paths.dart';
 import '../../../navigation/demo_route_paths.dart';
 import 'package:riverpod_mvvm/shared/theme/app_spacing.dart';

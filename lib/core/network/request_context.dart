@@ -32,6 +32,7 @@ class RequestContext {
     this.idempotencyKey,
     this.allowRetry = false,
     this.replayPolicy = RequestReplayPolicy.automatic,
+    this.trackNetworkQuality = true,
     this.extra = const {},
   });
 
@@ -62,6 +63,13 @@ class RequestContext {
   /// 敏感写操作、文件流或无法重新构造的 body 应设为 never。设为 never 后，新 token
   /// 仍会保存供下一次手工请求使用，但当前 401 会继续返回给调用方。
   final RequestReplayPolicy replayPolicy;
+
+  /// 是否把本请求耗时和网络传输失败计入全局弱网判断。
+  ///
+  /// 普通 JSON 接口保持 true。长轮询、流式响应、大文件等天然耗时请求应设为 false，
+  /// 否则它们可能被误认为慢网络。上传/下载由 ApiClient 内部强制排除，不需要调用方
+  /// 重复设置。关闭本开关只影响质量提示，不影响超时、错误转换、重试或性能上报。
+  final bool trackNetworkQuality;
 
   /// 给自定义拦截器传递、不发送给服务器的 Dio extra 元数据。
   ///

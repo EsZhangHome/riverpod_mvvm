@@ -33,6 +33,7 @@ import 'api_exception.dart';
 import 'api_response.dart';
 import 'api_service.dart';
 import 'dio_interceptor.dart';
+import 'network_quality_monitor.dart';
 import 'request_context.dart';
 import 'response_adapter.dart';
 import 'token_refresh_coordinator.dart';
@@ -66,8 +67,13 @@ class ApiClient implements ApiService {
   ///
   /// 构造函数只负责创建基础设施，不会立即发起网络请求。调用方应让 Riverpod
   /// 托管本实例，并在 Provider 销毁时调用 [close] 释放连接池。
-  ApiClient({Dio? dio, ResponseAdapter? responseAdapter})
-    : _responseAdapter = responseAdapter ?? const EnvelopeResponseAdapter() {
+  /// - [networkQualityMonitor]：可选真实请求质量监控器。由 Provider 传入后，
+  ///   ApiClient 只负责上报耗时/传输失败，不直接显示全局提示。
+  ApiClient({
+    Dio? dio,
+    ResponseAdapter? responseAdapter,
+    this.networkQualityMonitor,
+  }) : _responseAdapter = responseAdapter ?? const EnvelopeResponseAdapter() {
     _dio =
         dio ??
         Dio(
@@ -110,6 +116,9 @@ class ApiClient implements ApiService {
   /// 同一套成功码、消息字段和 data 解码规则。若项目存在多套完全不同的后端协议，
   /// 应按服务域创建不同 ApiClient，而不是在单个请求中临时切换协议。
   final ResponseAdapter _responseAdapter;
+
+  /// 可选的请求质量采样边界。null 表示调用方不需要弱网质量判断。
+  final NetworkQualityMonitor? networkQualityMonitor;
 
   /// token 提供者回调，由认证网络组合 Provider 注入。
   ///
@@ -499,6 +508,8 @@ class ApiClient implements ApiService {
         ...?context?.extra,
         if (context?.requestId != null) 'requestId': context!.requestId,
         if (context?.allowRetry ?? false) 'allowRetry': true,
+        if (forceNeverReplay || context?.trackNetworkQuality == false)
+          'networkQualityExcluded': true,
         if (forceNeverReplay ||
             context?.replayPolicy == RequestReplayPolicy.never)
           'replayDisabled': true,
@@ -523,8 +534,9 @@ class ApiClient implements ApiService {
   /// 1. RequestMetadataInterceptor → 补充请求 ID
   /// 2. TokenInterceptor           → 请求前动态注入 Authorization header
   /// 3. AppLogInterceptor          → 向当前 LogSink 记录脱敏元数据
-  /// 4. UnauthorizedInterceptor    → 捕获 401，并尝试刷新与安全重放
-  /// 5. RetryInterceptor           → 按白名单重试临时网络错误
+  /// 4. NetworkQualityInterceptor  → 采集真实请求耗时与传输失败
+  /// 5. UnauthorizedInterceptor    → 捕获 401，并尝试刷新与安全重放
+  /// 6. RetryInterceptor           → 按白名单重试临时网络错误
   void _configureInterceptors() {
     // 0. 请求追踪标识。
     _dio.interceptors.add(RequestMetadataInterceptor());
@@ -537,7 +549,13 @@ class ApiClient implements ApiService {
     // 2. 脱敏网络日志。是否真正输出由 AppLogger 当前配置的 LogSink 决定。
     _dio.interceptors.add(AppLogInterceptor());
 
-    // 3. 401 处理。闭包在真正发生 401 时读取最新刷新回调，不需要重建拦截器。
+    // 3. 网络质量采样是可选能力；未注入 Monitor 时完全不安装，也不产生额外对象。
+    final qualityMonitor = networkQualityMonitor;
+    if (qualityMonitor != null) {
+      _dio.interceptors.add(NetworkQualityInterceptor(monitor: qualityMonitor));
+    }
+
+    // 4. 401 处理。闭包在真正发生 401 时读取最新刷新回调，不需要重建拦截器。
     _dio.interceptors.add(
       UnauthorizedInterceptor(
         guard: _unauthorizedGuard,
@@ -549,7 +567,7 @@ class ApiClient implements ApiService {
       ),
     );
 
-    // 4. 网络重试：默认只重试 GET/HEAD 的临时连接错误；写请求必须显式声明幂等。
+    // 5. 网络重试：默认只重试 GET/HEAD 的临时连接错误；写请求必须显式声明幂等。
     _dio.interceptors.add(RetryInterceptor(dio: _dio));
   }
 }

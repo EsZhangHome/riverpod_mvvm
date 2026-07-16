@@ -18,4 +18,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get retry => 'Retry';
+
+  @override
+  String get networkDisconnected =>
+      'No network connection. Check your network settings.';
+
+  @override
+  String get networkRestored => 'Network connection restored';
+
+  @override
+  String get networkPoor => 'The network is slow. Trying to reconnect.';
+
+  @override
+  String get networkQualityRestored => 'Network quality restored';
 }

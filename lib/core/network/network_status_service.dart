@@ -48,6 +48,19 @@ class NetworkStatus {
 
   /// 是否有网络连接。
   bool get isConnected => type != NetworkConnectionType.none;
+
+  /// 相同连接类型视为同一状态，供 Stream.distinct 过滤插件重复事件。
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is NetworkStatus && other.type == type;
+  }
+
+  @override
+  int get hashCode => type.hashCode;
+
+  @override
+  String toString() => 'NetworkStatus(type: ${type.name})';
 }
 
 /// 网络状态服务抽象。

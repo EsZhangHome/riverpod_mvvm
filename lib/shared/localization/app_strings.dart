@@ -16,7 +16,8 @@ class AppStrings {
   static const String login = '登录';
   static const String account = '手机号/邮箱';
   static const String password = '密码';
-  static const String enterAccountAndPassword = '请输入账号和密码';
+  static const String enterAccount = '请输入手机号或邮箱';
+  static const String enterPassword = '请输入密码';
   static const String retry = '重试';
   static const String backHome = '返回首页';
   static const String noData = '暂无数据';

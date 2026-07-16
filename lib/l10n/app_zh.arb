@@ -7,5 +7,9 @@
       "stages": {"type": "String"}
     }
   },
-  "retry": "重试"
+  "retry": "重试",
+  "networkDisconnected": "当前网络不可用，请检查网络设置",
+  "networkRestored": "网络连接已恢复",
+  "networkPoor": "当前网络较慢，正在尝试重新连接",
+  "networkQualityRestored": "网络状况已恢复"
 }

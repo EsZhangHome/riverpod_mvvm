@@ -115,6 +115,30 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'重试'**
   String get retry;
+
+  /// No description provided for @networkDisconnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前网络不可用，请检查网络设置'**
+  String get networkDisconnected;
+
+  /// No description provided for @networkRestored.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络连接已恢复'**
+  String get networkRestored;
+
+  /// No description provided for @networkPoor.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前网络较慢，正在尝试重新连接'**
+  String get networkPoor;
+
+  /// No description provided for @networkQualityRestored.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络状况已恢复'**
+  String get networkQualityRestored;
 }
 
 class _AppLocalizationsDelegate

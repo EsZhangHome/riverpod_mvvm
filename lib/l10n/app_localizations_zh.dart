@@ -18,4 +18,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get retry => '重试';
+
+  @override
+  String get networkDisconnected => '当前网络不可用，请检查网络设置';
+
+  @override
+  String get networkRestored => '网络连接已恢复';
+
+  @override
+  String get networkPoor => '当前网络较慢，正在尝试重新连接';
+
+  @override
+  String get networkQualityRestored => '网络状况已恢复';
 }
