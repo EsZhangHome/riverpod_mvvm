@@ -24,7 +24,10 @@ import '../theme/app_spacing.dart';
 class ErrorView extends StatelessWidget {
   const ErrorView({super.key, required this.message, this.onRetry});
 
-  /// 错误提示文案，直接展示给用户
+  /// 最终展示给用户的错误文案。
+  ///
+  /// 调用方应传入本地固定文案，或由 FailureMessageResolver 筛选过的安全服务端文案；
+  /// 不要直接传入 `error.toString()`，以免把接口地址、内部异常等技术细节暴露给用户。
   final String message;
 
   /// 重试回调，为 null 时不显示重试按钮

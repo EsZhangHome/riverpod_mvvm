@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Dio 在 Debug、Profile 和 Release 中都需要联网。只把权限写在 debug
+         Manifest 会导致开发环境正常、正式包所有接口都失败。 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
    <application
         android:label="Riverpod MVVM"
         android:name="${applicationName}"

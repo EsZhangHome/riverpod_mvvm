@@ -110,7 +110,17 @@ void main() {
       onSuccess: () {},
       onError: messages.add,
     );
+    await handler.execute<void>(
+      request: () => throw BusinessException(
+        code: 2,
+        userMessage: 'database host: private.internal',
+        canDisplayMessage: false,
+      ),
+      onLoading: () {},
+      onSuccess: () {},
+      onError: messages.add,
+    );
 
-    expect(messages, ['余额不足', '请求失败，请稍后重试']);
+    expect(messages, ['余额不足', '请求失败，请稍后重试', '请求失败，请稍后重试']);
   });
 }

@@ -13,7 +13,7 @@ import 'package:dio/dio.dart';
 import '../../../core/config/env_config.dart';
 import '../../../core/network/api_service.dart';
 import '../../../core/network/api_exception.dart';
-import '../../../core/network/endpoints.dart';
+import 'auth_endpoints.dart';
 import '../model/login_request.dart';
 import '../model/login_response.dart';
 
@@ -65,7 +65,7 @@ class LoginRepositoryImpl implements LoginRepository {
   }) async {
     // ApiService 统一处理基础地址、状态码、异常映射和 JSON 转换。
     final response = await _apiService.post<LoginResponse>(
-      Endpoints.login,
+      AuthEndpoints.login,
       data: request.toJson(),
       cancelToken: cancelToken,
       fromJson: (json) => LoginResponse.fromJson(json as Map<String, dynamic>),

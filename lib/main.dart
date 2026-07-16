@@ -1,64 +1,12 @@
-// lib/main.dart
-//
-// 作用：App 的入口文件，负责初始化顺序和全局异常捕获。
-//
-// 启动流程：
-// 1. 注册全局异常捕获
-// 2. 绑定 Flutter 引擎
-// 3. 初始化本地存储
-// 4. 初始化本地数据库
-// 5. 启动 App（ProviderScope → MyApp）
+// 企业应用唯一入口。
+// 这里只组装底座默认路由；真实项目创建自己的 AppRouteBundle 后在这里替换。
+// main 不直接初始化 SDK，也不创建 ProviderContainer，所有项目都沿用同一启动顺序。
 
-import 'dart:ui';
+import 'app/bootstrap/run_application.dart';
+import 'app/navigation/app_route_bundle.dart';
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'app/app.dart';
-import 'core/database/app_database.dart';
-import 'core/storage/local_storage.dart';
-import 'core/utils/crash_reporter.dart';
-
-/// App 入口函数。
-Future<void> main() async {
-  // ==================== 步骤 1：注册全局异常捕获 ====================
-
-  FlutterError.onError = _onFlutterError;
-  PlatformDispatcher.instance.onError = _onPlatformError;
-
-  // ==================== 步骤 2：绑定 Flutter 引擎 ====================
-
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // ==================== 步骤 3：初始化本地存储 ====================
-
-  try {
-    await LocalStorage.init();
-  } catch (error, stack) {
-    CrashReporter.report(error, stack);
-  }
-
-  // ==================== 步骤 4：初始化本地数据库 ====================
-
-  try {
-    await AppDatabase.init();
-  } catch (error, stack) {
-    CrashReporter.report(error, stack);
-  }
-
-  // ==================== 步骤 5：启动 App ====================
-
-  // ProviderScope 是 Riverpod 的根节点，子树中的 Widget 和 Notifier
-  // 都从同一个容器读取依赖与状态。
-  runApp(const ProviderScope(child: MyApp()));
-}
-
-void _onFlutterError(FlutterErrorDetails details) {
-  FlutterError.presentError(details);
-  CrashReporter.report(details.exception, details.stack);
-}
-
-bool _onPlatformError(Object error, StackTrace stack) {
-  CrashReporter.report(error, stack);
-  return true;
+Future<void> main() {
+  // starter() 不是环境开关，而是“尚未接入真实业务”时使用的最小路由包：
+  // 登录成功后只进入 /starter。接入项目首页后替换为 createProjectRoutes()。
+  return runApplication(const AppRouteBundle.starter());
 }

@@ -1,6 +1,6 @@
 // lib/core/storage/local_storage.dart
 //
-// 作用：SharedPreferences 的薄封装，提供安全的本地键值存储读写。
+// 作用：SharedPreferences 的薄封装，提供普通偏好的容错读写。
 //
 // 架构职责：
 // - 封装 SharedPreferences 的初始化逻辑
@@ -12,11 +12,13 @@
 // 1. 静态方法 + 静态字段，全局只有一个 SharedPreferences 实例
 // 2. 初始化失败不阻断 App 启动，所有读写方法做安全降级
 // 3. 所有方法都检查 _initialized 状态，防止未初始化时崩溃
-// 4. 未来如果替换存储实现（如换成 Hive），只需要修改这个类
+// 4. 若新存储仍能提供相同的同步读取与异步写入契约，替换工作主要收敛在本类；
+//    如果读写模型不同，还需同步调整 Bootstrap 和调用方接口
 //
-// 与 TokenStorage 的区别：
-// - LocalStorage：普通键值存储，适合用户偏好、主题设置等
-// - TokenStorage：专门存储敏感数据（token），使用系统安全存储
+// 与 SessionStore 的区别：
+// - LocalStorage：普通键值存储，适合主题、开关等非敏感偏好；
+// - SessionStore：保存 token 和用户信息组成的完整会话，使用系统安全存储。
+// 敏感信息不要写入本类，否则可能以明文形式出现在设备备份或应用数据中。
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,12 +26,12 @@ import '../utils/crash_reporter.dart';
 
 /// SharedPreferences 的薄封装。
 ///
-/// 业务层统一使用 LocalStorage 而不是直接操作 SharedPreferences，
-/// 方便以后替换存储实现（如从 SharedPreferences 换成 Hive 或 MMKV）。
+/// 业务层统一使用 LocalStorage 而不是直接操作 SharedPreferences，可以减少以后
+/// 更换实现时的改动范围；但 Hive 等异步模型不同的方案仍可能需要调整本类契约。
 ///
 /// 使用方式：
 /// ```dart
-/// // 初始化（在 main.dart 中调用一次）
+/// // 初始化（由 AppBootstrap 在业务 ProviderScope 创建前调用一次）
 /// await LocalStorage.init();
 ///
 /// // 读写操作
@@ -52,7 +54,8 @@ class LocalStorage {
 
   /// 初始化 SharedPreferences。
   ///
-  /// 在 App 启动时调用一次（main.dart 中），后续读写不需要重复 await getInstance。
+  /// 在 AppBootstrap 创建业务 ProviderScope 前调用一次，后续读写不需要重复
+  /// `await SharedPreferences.getInstance()`。
   ///
   /// 初始化失败时的处理：
   /// - 记录错误到 CrashReporter
@@ -76,7 +79,9 @@ class LocalStorage {
   /// 返回 null 的情况：
   /// - 尚未初始化
   /// - key 不存在
-  /// - 值不是 String 类型
+  ///
+  /// SharedPreferences 要求同一个 key 始终使用相同类型。如果其他代码曾用同名 key
+  /// 写入非 String 值，插件读取时可能抛出类型异常，而不是把协议错误伪装成“没有值”。
   static String? getString(String key) {
     if (!_initialized) {
       // 未初始化时返回 null，让调用方按"没有缓存"处理
@@ -87,10 +92,11 @@ class LocalStorage {
 
   /// 写入字符串值。
   ///
-  /// 返回 true 表示写入成功，false 表示写入失败（未初始化或存储异常）。
+  /// 返回 true 表示插件写入成功；未初始化时返回 false。
+  /// 插件执行期间的异常会通过 Future 继续抛出，由调用方按业务重要性处理。
   static Future<bool> setString(String key, String value) {
     if (!_initialized) {
-      // 写入失败用 false 表达，不抛异常影响业务流程
+      // 这里只处理“尚未初始化”；真正插件写入异常不会在此静默吞掉。
       return Future<bool>.value(false);
     }
     return _preferences!.setString(key, value);
@@ -100,6 +106,7 @@ class LocalStorage {
   ///
   /// [defaultValue]：key 不存在或未初始化时返回的默认值。
   /// 支持默认值可以避免调用方每次都判空。
+  /// 如果同名 key 实际保存的不是 bool，插件读取时可能抛出类型异常。
   static bool getBool(String key, {bool defaultValue = false}) {
     if (!_initialized) {
       return defaultValue;
@@ -109,7 +116,7 @@ class LocalStorage {
 
   /// 写入布尔值。
   ///
-  /// 返回 true 表示写入成功，false 表示写入失败。
+  /// 返回 true 表示插件写入成功，未初始化时返回 false；插件异常继续抛出。
   static Future<bool> setBool(String key, bool value) {
     if (!_initialized) {
       return Future<bool>.value(false);
@@ -119,7 +126,7 @@ class LocalStorage {
 
   /// 删除指定 key 的值。
   ///
-  /// 返回 true 表示删除成功，false 表示删除失败。
+  /// 返回 true 表示插件删除成功，未初始化时返回 false；插件异常继续抛出。
   static Future<bool> remove(String key) {
     if (!_initialized) {
       return Future<bool>.value(false);
@@ -129,10 +136,10 @@ class LocalStorage {
 
   /// 清空所有存储数据。
   ///
-  /// 注意：这是高风险操作，会删除所有 SharedPreferences 数据。
-  /// 通常只在退出登录或清除缓存时使用。
+  /// 注意：这是高风险操作，会删除所有 SharedPreferences 数据，包括主题等
+  /// 与账号无关的偏好。普通退出登录应只删除用户级 key，不应调用本方法。
   ///
-  /// 返回 true 表示清空成功，false 表示清空失败。
+  /// 返回 true 表示插件清空成功，未初始化时返回 false；插件异常继续抛出。
   static Future<bool> clear() {
     if (!_initialized) {
       // clear 是高风险操作，未初始化时直接返回失败

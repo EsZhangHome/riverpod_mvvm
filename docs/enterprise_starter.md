@@ -1,0 +1,294 @@
+# 企业项目启动指南
+
+这份文档只讲“如何把当前仓库用作一个新的企业 Flutter 项目底座”。完整架构入口见根目录
+[README.md](../README.md)；Riverpod API 的可运行案例由独立示例应用自行维护。
+
+## 1. 底座边界
+
+底座已经提供：
+
+- Riverpod 3 依赖注入、App 级状态与 MVVM 业务状态组织方式。
+- GoRouter 登录守卫、可注入业务路由包和等待真实业务替换的起始页。
+- 首帧前关键启动、首帧后后台预热、失败重试与配置阻断。
+- Dio 抽象、响应协议适配、请求 ID、幂等键、重试、取消、上传下载。
+- 完整会话安全存储、旧会话迁移、可插拔刷新令牌、并发 401 单次刷新与失败退出。
+- SQLite 迁移、普通存储、安全存储、网络状态、权限和 App 信息抽象。
+- 可替换日志、崩溃与性能上报后端、ARB 国际化入口。
+- 模块依赖、MVVM 分层和循环依赖自动检查、覆盖率门禁与 GitHub Actions CI。
+
+底座刻意不预设：
+
+- 具体公司的 UI 品牌、埋点平台、推送平台、地图、支付和即时通讯。
+- 通用“万能 BaseRepository / BaseViewModel / BasePage”。业务差异大时，这类继承通常制造耦合。
+- 所有企业都不需要的微服务 SDK、动态化、插件化或复杂多包工程。
+
+这些能力应在真实需求出现后，通过现有接口和 Provider 注入，而不是提前塞进 core。
+
+## 2. 创建新项目
+
+在仓库根目录先预览：
+
+```bash
+dart run tool/bootstrap.dart \
+  --name acme_console \
+  --display-name "Acme Console" \
+  --organization com.acme \
+  --mode production \
+  --dry-run
+```
+
+确认后去掉 `--dry-run`。工具会同步处理：
+
+- `pubspec.yaml` 包名和描述。
+- 所有 `package:<old-name>/` import。
+- Android namespace、applicationId、Manifest 显示名和 MainActivity 包目录。
+- iOS bundle identifier、显示名和 bundle name。
+- SQLite 数据库文件名。
+- `config/local.json` 初始环境文件。
+
+执行完成后：
+
+```bash
+flutter pub get
+dart run build_runner build
+flutter analyze
+flutter test
+```
+
+不要重复运行初始化工具。若第一次使用了 `--mode production`，必须先替换
+`config/local.json` 中的占位 API 地址，否则启动校验会按设计阻断 App。
+
+## 3. 启动任务放置规则
+
+底座没有在 `main()` 中串行初始化所有 SDK。启动分成四种时机：
+
+| 时机 | 适合内容 | 现有入口 |
+| --- | --- | --- |
+| runApp 前 | Engine 绑定、日志配置、全局异常入口 | `runApplication` |
+| 创建业务 ProviderScope 前 | 环境安全校验、Provider 立即依赖的最小存储 | `AppBootstrap` |
+| 第一帧后 | 监控、远程配置、更新检查等非关键全局任务 | `AppWarmup` |
+| 第一次使用 | SQLite、地图、支付等功能专用重能力 | 对应 Provider |
+
+AppWarmup 中的任务彼此独立并行执行。失败只记录 `AppWarmupIssue`，不能把已经显示的首页切回错误页。
+SQLite 由 `appDatabaseProvider` 延迟到第一次 CRUD，完全不用数据库的项目不会增加这段启动耗时。
+
+项目级 Provider 替换从统一入口传入：
+
+```dart
+Future<void> main() {
+  return runApplication(
+    createProjectRoutes(),
+    rootBuilder: (child) => ProviderScope(
+      overrides: [
+        responseAdapterProvider.overrideWithValue(
+          const ProjectResponseAdapter(),
+        ),
+        sessionRefresherProvider.overrideWith(
+          (ref) => ProjectSessionRefresher(ref.watch(authApiProvider)),
+        ),
+      ],
+      child: child,
+    ),
+  );
+}
+```
+
+这样每个项目只修改组合入口，不需要改 `AppRouter`、`ApiClient` 或通用 Provider 的内部实现。
+
+## 4. 环境与安全
+
+环境模板位于 `config/`：
+
+| 文件 | 用途 | Mock |
+| --- | --- | --- |
+| `development.json` | 本地开发 | 开启 |
+| `testing.json` | 测试服务联调 | 关闭 |
+| `staging.json` | 验收环境模板 | 关闭，API 必须替换 |
+| `production.example.json` | 生产模板 | 关闭，复制后使用 |
+| `local.json` | 每位开发者的本地覆盖 | Git 忽略 |
+
+运行：
+
+```bash
+flutter run --dart-define-from-file=config/local.json
+```
+
+production 环境或任意 release 构建会强制检查：
+
+- API 必须是 HTTPS 且不能是 `example.com` / `.invalid` 占位地址。
+- Mock、调试日志、Charles 和坏证书放行必须关闭。
+- App 名和 API URL 必须有效。
+
+dart-define 不是秘密存储。API secret、私钥和固定访问令牌不能放进 JSON 或 Dart 代码，应由后端交换、
+系统安全存储或 CI secret 提供。
+
+## 5. 接入正式业务
+
+根项目本身就是纯企业底座，不需要先运行清理脚本。推荐先用 `tool/bootstrap.dart` 完成包名、
+平台标识和数据库文件名初始化，再创建第一个真实 feature。
+
+接入第一个真实模块时：
+
+1. 创建 `lib/features/<feature>/`。
+2. 保持 `model / repository / view_model / view` 数据流。
+3. 在 `<feature>.dart` 只导出 App 或其他模块真正需要的公开 API。
+4. 创建项目自己的路径类和 `AppRouteBundle`，在路由包中通过公共入口组装页面。
+5. 在 `main.dart` 把默认的 `AppRouteBundle.starter()` 换成项目路由包；不要修改通用 `AppRouter`。
+
+跨 feature 依赖必须导入目标模块的 `<feature>.dart`，不能进入其内部目录。架构测试会同时检测分层越界
+和 feature 循环依赖。
+
+## 6. 后端协议接入
+
+Repository 只依赖 `ApiService`。项目默认的 `EnvelopeResponseAdapter` 支持
+`{code, message, data}`，同时允许普通 Map / List 直接作为业务数据。
+
+纯 REST 后端通过 `runApplication(rootBuilder: ...)` 中的 ProviderScope 替换：
+
+```dart
+responseAdapterProvider.overrideWithValue(const DirectResponseAdapter())
+```
+
+协议字段不同则实现 `ResponseAdapter`：
+
+```dart
+class ProjectResponseAdapter implements ResponseAdapter {
+  const ProjectResponseAdapter();
+
+  @override
+  ApiResponse<T> adapt<T>(
+    Response<dynamic> response,
+    T Function(dynamic json)? decoder,
+  ) {
+    // 只在这里解释项目后端协议。
+    throw UnimplementedError();
+  }
+}
+```
+
+不要在每个 Repository 重复判断 `code`，也不要让页面捕获 DioException。
+
+每个请求都可传 `RequestContext`：
+
+```dart
+final result = await apiService.post<Order>(
+  OrderEndpoints.create,
+  data: request.toJson(),
+  cancelToken: cancelToken,
+  context: const RequestContext(
+    idempotencyKey: 'create-order-unique-id',
+    allowRetry: true,
+    replayPolicy: RequestReplayPolicy.never,
+  ),
+  fromJson: (json) => Order.fromJson(json as Map<String, dynamic>),
+);
+```
+
+写操作只有在后端支持幂等键时才应打开网络重试。支付、建单等敏感写操作即使刷新 Token 成功，也不应
+自动重放，所以同时设置 `RequestReplayPolicy.never`。上传下载由底座强制禁止重放。页面或 Provider 销毁时
+应取消 `CancelToken`。
+
+## 7. 会话刷新
+
+默认 `DisabledSessionRefresher` 不假设后端具有 refresh token，401 会安全退出。真实项目实现：
+
+```dart
+class ProjectSessionRefresher implements SessionRefresher {
+  ProjectSessionRefresher(this.authApi);
+
+  final AuthApi authApi;
+
+  @override
+  Future<String?> refreshAccessToken() async {
+    final session = await authApi.refresh();
+    return session.accessToken;
+  }
+}
+```
+
+然后在 `runApplication` 的 `rootBuilder` 中替换 `sessionRefresherProvider`。刷新请求建议使用独立、没有
+`UnauthorizedInterceptor` 的客户端，避免刷新接口自身 401 时递归。
+
+`TokenRefreshCoordinator` 保证一批并发 401 共享一个刷新 Future；成功后原请求只重放一次，仍然 401
+或刷新失败才进入 `UnauthorizedGuard` 清理会话。
+
+`AuthSession` 把 token 与用户作为一个 JSON 写入系统安全存储，写成功后才发布已登录状态。底座保留一次
+旧版 `auth_token + current_user` 迁移，迁移成功或退出登录后会清除旧数据。新项目不要再用
+SharedPreferences 保存 token，也不要在登录页源码中放默认账号或密码。
+
+## 8. 日志、监控与隐私
+
+`AppLogger`、`CrashReporter` 和 `AppPerformance` 是稳定入口。接入 Sentry、Firebase Crashlytics、
+Datadog 或公司平台时，实现 `LogSink`、`CrashReportingBackend`、`PerformanceReporter`，通过
+`runApplication` 参数注入；SDK 的耗时初始化仍由首帧后的 AppWarmup 调用。
+
+网络日志默认不记录 Header、请求体、响应体、Query、Fragment 和 URL 用户信息，只记录方法、安全路径、
+状态码和 requestId。扩展日志时仍应过滤：
+
+- token、cookie、密码、验证码和身份证号。
+- 请求/响应中的个人信息。
+- 数据库完整记录和文件路径中的用户信息。
+
+`BootstrapResult` 可用于上报“ready / degraded / failed”以及关键启动失败阶段；首帧后任务的结果读取
+`appWarmupProvider`，两类问题不要混成同一个启动状态。
+
+性能门面已经记录 Bootstrap、Warmup、SQLite 首次打开、网络请求和 Flutter 帧耗时。指标 attributes 只能放
+方法、路径、状态码等低基数字段，不能放用户 id、订单号、完整 URL；性能 SDK 抛错会被隔离，不会打断业务。
+
+## 9. 本地化
+
+正式文案写入 `lib/l10n/app_zh.arb`、`app_en.arb`，页面通过
+`AppLocalizations.of(context)` 读取。底座 `AppStrings` 只保留底层状态工具无法通过
+`BuildContext` 读取的通用错误与认证文案，不应继续堆积具体业务字符串。
+
+修改 ARB 后执行：
+
+```bash
+flutter gen-l10n
+```
+
+## 10. 发布准备
+
+Android 不再使用 debug key 签 release。复制 `android/key.properties.example` 为
+`android/key.properties` 并填写本地或 CI 密钥；真实文件和 keystore 已被 Git 忽略。
+
+网络权限必须保留在 `android/app/src/main/AndroidManifest.xml`，不能只写在 debug/profile Manifest，
+否则 Release 包无法联网。相机、定位、相册等业务权限不要预置在底座；确定真实功能后再同时补 Android
+Manifest、iOS Info.plist 权限说明和拒绝后的产品流程。
+
+iOS 工程不写死开发团队，签名由 Xcode 或 CI 按项目配置。
+
+发布前至少执行：
+
+```bash
+dart format --output=none --set-exit-if-changed lib test tool
+dart run build_runner build
+flutter analyze
+flutter test --coverage
+dart run tool/check_coverage.dart --minimum 55
+flutter build apk --release --dart-define-from-file=config/local.json
+flutter build ios --release --no-codesign --dart-define-from-file=config/local.json
+```
+
+同时人工确认：
+
+- production API、隐私政策、权限文案、图标、启动图和版本号。
+- 使用默认 `lib/main.dart` 构建；Mock / 调试日志 / Charles 全部关闭。
+- 数据库 migration 能从线上最老受支持版本升级。
+- 登录过期、弱网、离线、重复提交、应用切后台和低内存恢复路径。
+- 崩溃、性能、接口 requestId 和关键业务埋点可在生产平台追踪。
+
+## 11. CI 与合并门禁
+
+`.github/workflows/ci.yml` 默认执行：
+
+1. Flutter 3.44.0 安装与依赖恢复。
+2. Dart 格式校验。
+3. build_runner 生成并检查仓库无差异。
+4. `flutter analyze`。
+5. `flutter test --coverage`，并执行 55% 最低覆盖率门禁。
+6. Debug APK 构建。
+7. 独立 Demo 的格式、生成代码、静态分析和测试；删除 Demo 目录后该 Job 自动跳过。
+
+团队可在此基础上提高覆盖率阈值，增加 Sonar、依赖漏洞扫描、签名 release 构建与分发平台上传；这些步骤
+依赖组织账号和密钥，因此不在通用底座中硬编码。

@@ -1,0 +1,67 @@
+name: Flutter CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: flutter-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test tool
+      - name: Verify generated code
+        run: |
+          dart run build_runner build
+          git diff --exit-code
+      - run: flutter analyze
+      - run: flutter test --coverage
+      - name: Enforce coverage floor
+        run: dart run tool/check_coverage.dart --minimum 55
+      - name: Build debug APK
+        run: flutter build apk --debug --dart-define-from-file=config/development.json
+
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: examples/demo_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        # checkout 后再检测目录；Demo 被删除时后续步骤全部跳过。
+        if: ${{ hashFiles('examples/demo_app/pubspec.yaml') != '' }}
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        if: ${{ hashFiles('examples/demo_app/pubspec.yaml') != '' }}
+      - name: Verify Demo formatting
+        if: ${{ hashFiles('examples/demo_app/pubspec.yaml') != '' }}
+        run: dart format --output=none --set-exit-if-changed lib test
+      - name: Verify Demo generated code
+        if: ${{ hashFiles('examples/demo_app/pubspec.yaml') != '' }}
+        run: |
+          dart run build_runner build
+          git diff --exit-code -- lib
+      - run: flutter analyze
+        if: ${{ hashFiles('examples/demo_app/pubspec.yaml') != '' }}
+      - run: flutter test
+        if: ${{ hashFiles('examples/demo_app/pubspec.yaml') != '' }}

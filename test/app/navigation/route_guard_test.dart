@@ -5,19 +5,39 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/app/navigation/route_guard.dart';
-import 'package:riverpod_mvvm/shared/navigation/route_paths.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
+import 'package:riverpod_mvvm/shared/navigation/route_paths.dart';
+
+// 这里故意使用测试自己的“业务路由”，而不是导入某个真实 feature。
+//
+// AuthRouteGuard 是企业底座能力，它只关心“哪些地址受保护”，不应该知道
+// 首页、订单页等具体业务。测试遵守同一条依赖规则，替换业务模块后仍能原样运行。
+const _businessHome = '/business/home';
+const _businessRoot = '/business';
+const _businessOrders = '/business/orders';
+const _businessMine = '/business/mine';
+const _businessLearning = '/business/learning';
 
 void main() {
-  const restoring = AuthState(isRestoringSession: true);
-  const loggedOut = AuthState();
-  const loggedIn = AuthState(token: 'token');
-  final guard = AuthRouteGuard(() => loggedOut);
+  const restoring = AuthState.restoring();
+  const loggedOut = AuthState.unauthenticated();
+  const loggedIn = AuthState.authenticated(
+    AuthSession(
+      token: 'token',
+      user: UserModel(id: '1', name: 'Tester', email: 'test@example.com'),
+    ),
+  );
+  final guard = AuthRouteGuard(
+    () => loggedOut,
+    authenticatedHome: _businessHome,
+    protectedPaths: const [_businessLearning],
+    protectedPrefixes: const [_businessRoot],
+  );
 
   group('AuthRouteGuard redirect matrix', () {
     test('session restoration always stays on splash', () {
       expect(
-        guard.redirectLocation(RoutePaths.mainHome, restoring),
+        guard.redirectLocation(_businessHome, restoring),
         RoutePaths.splash,
       );
       expect(guard.redirectLocation(RoutePaths.splash, restoring), isNull);
@@ -30,17 +50,17 @@ void main() {
       );
       expect(
         guard.redirectLocation(RoutePaths.splash, loggedIn),
-        RoutePaths.mainHome,
+        _businessHome,
       );
     });
 
     test('logged-out users cannot enter protected routes', () {
       for (final location in [
-        RoutePaths.main,
-        RoutePaths.mainHome,
-        RoutePaths.mainOrders,
-        RoutePaths.mainMine,
-        RoutePaths.riverpodLearning,
+        _businessRoot,
+        _businessHome,
+        _businessOrders,
+        _businessMine,
+        _businessLearning,
       ]) {
         expect(
           guard.redirectLocation(location, loggedOut),
@@ -51,11 +71,8 @@ void main() {
     });
 
     test('logged-in users leave login and can enter protected routes', () {
-      expect(
-        guard.redirectLocation(RoutePaths.login, loggedIn),
-        RoutePaths.mainHome,
-      );
-      expect(guard.redirectLocation(RoutePaths.mainOrders, loggedIn), isNull);
+      expect(guard.redirectLocation(RoutePaths.login, loggedIn), _businessHome);
+      expect(guard.redirectLocation(_businessOrders, loggedIn), isNull);
     });
   });
 }

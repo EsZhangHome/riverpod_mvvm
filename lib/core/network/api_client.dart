@@ -3,17 +3,17 @@
 // 作用：ApiService 接口的具体实现，封装 Dio 实例，提供统一的 HTTP 请求方法。
 //
 // 架构职责：
-// - 实现 ApiService 接口，提供 get/post/put/delete/upload 五个方法
+// - 实现 ApiService 接口，提供常用 HTTP、上传与下载能力
 // - 管理 Dio 实例的创建和配置（baseUrl、超时、headers）
-// - 管理拦截器链的组装和更新
+// - 构造一次稳定拦截器链，运行时只更新认证回调
 // - 处理请求结果的统一解析和异常转换
-// - 通过回调注入 token 和 401 处理，解耦网络层和 AuthProvider
+// - 通过回调接收 token、刷新和 401 处理，不反向依赖认证模块
 //
 // 设计要点：
-// 1. 单例模式：整个 App 只有一个 ApiClient 实例（通过 ApiClient.instance 获取）
-// 2. 回调注入：tokenProvider 和 onUnauthorized 由 AuthProvider 注入，网络层不依赖任何业务层
+// 1. 容器托管：ApiClient 由 Riverpod Provider 创建、持有和释放
+// 2. 回调注入：authNetworkBindingProvider 在组合层接线，网络层不 import 认证模块
 // 3. 统一解析：_request 方法统一处理 API 响应解析和异常转换
-// 4. 拦截器动态更新：token 或 401 回调变更时，重新组装拦截器链
+// 4. 拦截器链稳定：token 或 401 回调变化不会清空正在执行的拦截器链
 // 5. Charles 抓包：通过 EnvConfig 开关控制，默认关闭，不影响正常请求
 //
 // 数据流：
@@ -33,13 +33,15 @@ import 'api_exception.dart';
 import 'api_response.dart';
 import 'api_service.dart';
 import 'dio_interceptor.dart';
-import 'endpoints.dart';
+import 'request_context.dart';
+import 'response_adapter.dart';
+import 'token_refresh_coordinator.dart';
 
 /// ApiClient 是网络请求的统一入口。
 ///
 /// Repository 只依赖 ApiService 接口，不直接依赖 ApiClient。
-/// Riverpod 在 services.dart 中把 ApiClient.instance 暴露为 apiClientProvider，
-/// 再由 apiServiceProvider 以 ApiService 接口类型交给 Repository。
+/// Riverpod 通过 apiClientProvider 创建实例，再由 apiServiceProvider
+/// 以 ApiService 接口类型交给 Repository；测试可 override 任一层。
 ///
 /// 使用方式：
 /// ```dart
@@ -50,58 +52,64 @@ import 'endpoints.dart';
 /// }
 /// ```
 class ApiClient implements ApiService {
-  // ==================== 单例模式 ====================
-
-  /// 私有构造函数，在构造时完成 Dio 实例的初始化和拦截器组装。
-  ApiClient._internal() {
-    _dio = Dio(
-      BaseOptions(
-        // 从 EnvConfig 读取 baseUrl，通过 --dart-define 切换环境
-        baseUrl: Endpoints.baseUrl,
-        // 连接超时：建立 TCP 连接的最大等待时间
-        connectTimeout: const Duration(seconds: EnvConfig.connectTimeout),
-        // 接收超时：等待服务器返回响应的最大时间
-        receiveTimeout: const Duration(seconds: EnvConfig.receiveTimeout),
-        // 发送超时：发送请求体的最大等待时间
-        sendTimeout: const Duration(seconds: EnvConfig.sendTimeout),
-        // 默认 Content-Type，大多数接口都是 JSON
-        headers: {'Content-Type': 'application/json'},
-      ),
-    );
+  ApiClient({Dio? dio, ResponseAdapter? responseAdapter})
+    : _responseAdapter = responseAdapter ?? const EnvelopeResponseAdapter() {
+    _dio =
+        dio ??
+        Dio(
+          BaseOptions(
+            // 从 EnvConfig 读取 baseUrl，通过 --dart-define 切换环境
+            baseUrl: EnvConfig.apiBaseUrl,
+            // 连接超时：建立 TCP 连接的最大等待时间
+            connectTimeout: const Duration(seconds: EnvConfig.connectTimeout),
+            // 接收超时：等待服务器返回响应的最大时间
+            receiveTimeout: const Duration(seconds: EnvConfig.receiveTimeout),
+            // 发送超时：发送请求体的最大等待时间
+            sendTimeout: const Duration(seconds: EnvConfig.sendTimeout),
+            // 默认 Content-Type，大多数接口都是 JSON
+            headers: {'Content-Type': 'application/json'},
+          ),
+        );
     // 如果编译参数打开了 Charles 抓包，这里给 Dio 换上带代理的 HttpClient。
     _configureCharlesProxyIfNeeded();
-    // 组装拦截器链
-    _resetInterceptors();
+    // 拦截器链只创建一次。登录、退出和刷新 Token 只更新回调字段，避免请求执行中
+    // 清空 Dio interceptors。
+    _unauthorizedGuard = UnauthorizedGuard(
+      onUnauthorized: () async {
+        await _onUnauthorized?.call();
+      },
+    );
+    _configureInterceptors();
   }
-
-  /// 全局唯一实例。
-  static final ApiClient instance = ApiClient._internal();
 
   // ==================== 私有字段 ====================
 
-  /// Dio 实例，只在 ApiClient 内部维护，外部不可见。
+  /// Dio 实例由 ApiClient 统一维护。
   ///
-  /// 外部如果要请求接口，应通过 ApiService 接口的 get/post/put/delete/upload 方法，
-  /// 而不是直接使用 dio。
+  /// 普通 Repository 应通过 ApiService 请求，不应读取下面的 [dio] getter；getter
+  /// 只为基础设施扩展和底层测试保留，因此这里不是“完全隐藏 Dio”的强隔离。
   late final Dio _dio;
+  final ResponseAdapter _responseAdapter;
 
-  /// token 提供者回调，由 AuthProvider 注入。
+  /// token 提供者回调，由认证网络组合 Provider 注入。
   ///
   /// 每次请求前，TokenInterceptor 会调用这个回调获取最新 token。
   /// 返回 null 表示未登录，返回字符串表示当前 token。
   String? Function()? _tokenProvider;
 
-  /// 401 未授权回调，由 AuthProvider 注入。
+  /// 401 未授权回调，由认证网络组合 Provider 注入。
   ///
-  /// 当拦截器捕获到 401 错误时，调用这个回调执行退出登录。
+  /// 当刷新不可用、刷新失败或重放后仍为 401，确认会话失效时调用该回调。
   Future<void> Function()? _onUnauthorized;
+  RefreshAccessToken? _refreshAccessToken;
 
-  /// 401 防抖守卫，防止多个并发 401 重复触发退出登录。
-  UnauthorizedGuard? _unauthorizedGuard;
+  /// 会话失效守卫，防止一批 401 重复触发退出登录。
+  late final UnauthorizedGuard _unauthorizedGuard;
 
   // ==================== 公开属性 ====================
 
-  /// 暴露 Dio 实例，仅供特殊场景使用（如自定义拦截器）。
+  /// 底层扩展入口，例如项目组合层添加自定义拦截器。
+  /// 业务 Repository 不应使用它绕过 ApiService 的响应适配与异常转换。
   Dio get dio => _dio;
 
   // ==================== Charles 抓包配置 ====================
@@ -146,30 +154,31 @@ class ApiClient implements ApiService {
 
   /// 设置 token 提供者回调。
   ///
-  /// 由 AuthProvider 在构造时调用。
-  /// 设置后会重新组装拦截器链，确保 TokenInterceptor 使用最新的 tokenProvider。
+  /// 由认证网络组合 Provider 调用。拦截器通过闭包读取当前回调，因此这里只替换
+  /// 字段，不会在请求执行期间清空或重建 Dio 拦截器链。
   void setTokenProvider(String? Function() tokenProvider) {
     _tokenProvider = tokenProvider;
-    _resetInterceptors();
   }
 
-  /// 设置 401 未授权回调。
+  /// 设置确认会话失效后的处理回调。
   ///
-  /// 由 AuthProvider 在构造时调用。
-  /// 设置后会创建 UnauthorizedGuard 和 UnauthorizedInterceptor，
-  /// 并重新组装拦截器链。
+  /// 由认证网络组合 Provider 调用。UnauthorizedGuard 和拦截器在客户端构造时已
+  /// 创建，这里只更新它们稍后读取的业务回调。
   void setUnauthorizedCallback(Future<void> Function() callback) {
     _onUnauthorized = callback;
-    _unauthorizedGuard = UnauthorizedGuard(onUnauthorized: callback);
-    _resetInterceptors();
   }
 
-  /// 重置 401 防抖守卫。
+  /// 可选刷新回调。未配置或返回 null 时保持原有 401 退出行为。
+  void setTokenRefreshCallback(RefreshAccessToken? callback) {
+    _refreshAccessToken = callback;
+  }
+
+  /// 重置会话失效守卫。
   ///
-  /// 用户重新登录后，由 AuthProvider 调用。
+  /// 用户重新登录或成功恢复会话后，由认证网络组合 Provider 调用。
   /// 允许下一次 token 失效时再次响应 401。
   void resetUnauthorizedGuard() {
-    _unauthorizedGuard?.reset();
+    _unauthorizedGuard.reset();
   }
 
   // ==================== HTTP 方法实现 ====================
@@ -178,9 +187,11 @@ class ApiClient implements ApiService {
   ///
   /// 示例：
   /// ```dart
-  /// final response = await apiClient.get<List<HomeBanner>>(
-  ///   Endpoints.homeBanners,
-  ///   fromJson: (json) => (json as List).map((e) => HomeBanner.fromJson(e)).toList(),
+  /// final response = await apiClient.get<List<Map<String, dynamic>>>(
+  ///   '/products',
+  ///   fromJson: (json) => (json as List)
+  ///       .map((item) => Map<String, dynamic>.from(item as Map))
+  ///       .toList(),
   /// );
   /// ```
   @override
@@ -188,6 +199,7 @@ class ApiClient implements ApiService {
     String path, {
     Map<String, dynamic>? queryParameters,
     CancelToken? cancelToken,
+    RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) {
     return _request<T>(
@@ -196,6 +208,7 @@ class ApiClient implements ApiService {
         path,
         queryParameters: queryParameters,
         cancelToken: cancelToken,
+        options: _options(context),
       ),
       fromJson,
     );
@@ -205,10 +218,10 @@ class ApiClient implements ApiService {
   ///
   /// 示例：
   /// ```dart
-  /// final response = await apiClient.post<LoginResponse>(
-  ///   Endpoints.login,
+  /// final response = await apiClient.post<Map<String, dynamic>>(
+  ///   '/auth/login',
   ///   data: {'account': 'xxx', 'password': 'xxx'},
-  ///   fromJson: (json) => LoginResponse.fromJson(json),
+  ///   fromJson: (json) => Map<String, dynamic>.from(json as Map),
   /// );
   /// ```
   @override
@@ -217,6 +230,7 @@ class ApiClient implements ApiService {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     CancelToken? cancelToken,
+    RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) {
     return _request<T>(
@@ -225,6 +239,7 @@ class ApiClient implements ApiService {
         data: data,
         queryParameters: queryParameters,
         cancelToken: cancelToken,
+        options: _options(context),
       ),
       fromJson,
     );
@@ -232,13 +247,15 @@ class ApiClient implements ApiService {
 
   /// PUT 请求：通常用于完整更新资源。
   ///
-  /// 与 POST 的区别：PUT 是幂等的，多次调用结果相同。
+  /// HTTP 语义上 PUT 应设计为幂等，但是否能安全重试仍取决于后端实现和
+  /// RequestContext，客户端不会只凭 PUT 方法名自动重试。
   @override
   Future<ApiResponse<T>> put<T>(
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     CancelToken? cancelToken,
+    RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) {
     return _request<T>(
@@ -247,6 +264,28 @@ class ApiClient implements ApiService {
         data: data,
         queryParameters: queryParameters,
         cancelToken: cancelToken,
+        options: _options(context),
+      ),
+      fromJson,
+    );
+  }
+
+  @override
+  Future<ApiResponse<T>> patch<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    CancelToken? cancelToken,
+    RequestContext? context,
+    T Function(dynamic json)? fromJson,
+  }) {
+    return _request<T>(
+      () => _dio.patch<dynamic>(
+        path,
+        data: data,
+        queryParameters: queryParameters,
+        cancelToken: cancelToken,
+        options: _options(context),
       ),
       fromJson,
     );
@@ -261,6 +300,7 @@ class ApiClient implements ApiService {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     CancelToken? cancelToken,
+    RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) {
     return _request<T>(
@@ -269,6 +309,7 @@ class ApiClient implements ApiService {
         data: data,
         queryParameters: queryParameters,
         cancelToken: cancelToken,
+        options: _options(context),
       ),
       fromJson,
     );
@@ -295,6 +336,7 @@ class ApiClient implements ApiService {
     Map<String, dynamic>? data,
     ProgressCallback? onSendProgress,
     CancelToken? cancelToken,
+    RequestContext? context,
     T Function(dynamic json)? fromJson,
   }) async {
     // 组装 FormData：把普通字段和文件字段合并
@@ -311,23 +353,48 @@ class ApiClient implements ApiService {
         data: formData,
         onSendProgress: onSendProgress,
         cancelToken: cancelToken,
+        options: _options(context, forceNeverReplay: true),
       ),
       fromJson,
     );
+  }
+
+  @override
+  Future<void> download(
+    String path,
+    String savePath, {
+    Map<String, dynamic>? queryParameters,
+    ProgressCallback? onReceiveProgress,
+    CancelToken? cancelToken,
+    RequestContext? context,
+  }) async {
+    try {
+      await _dio.download(
+        path,
+        savePath,
+        queryParameters: queryParameters,
+        onReceiveProgress: onReceiveProgress,
+        cancelToken: cancelToken,
+        options: _options(context, forceNeverReplay: true),
+      );
+    } on DioException catch (error) {
+      throw ApiException.fromDioException(error);
+    }
   }
 
   // ==================== 核心请求方法 ====================
 
   /// 统一请求处理：发出请求 → 解析响应 → 异常转换。
   ///
-  /// 所有 HTTP 方法（get/post/put/delete/upload）最终都调用这个方法。
+  /// `get/post/put/patch/delete/upload` 最终都调用这个方法；
+  /// `download` 返回文件而不是业务响应，因此单独处理。
   ///
   /// 处理流程：
-  /// 1. 执行 request() 闭包发出 HTTP 请求
-  /// 2. 检查响应数据是否为标准 Map 格式
-  ///    - 是：按 `ApiResponse<T>` 解析，检查业务 code 是否成功
-  ///    - 否：兼容处理，直接包装为 ApiResponse
-  /// 3. 捕获 DioException，转换为 ApiException 抛出
+  /// 1. 执行 [request] 闭包发出 HTTP 请求。
+  /// 2. 交给项目注入的 [ResponseAdapter] 适配响应协议并生成 `ApiResponse<T>`。
+  /// 3. 根据适配结果判断业务是否成功；失败时抛出 `BusinessException`。
+  /// 4. 把 Dio 网络异常转换为稳定的 `ApiException`，避免上层依赖 Dio 错误枚举。
+  /// 5. 把模型解码或协议不匹配转换为协议错误，交给上层统一生成安全提示文案。
   ///
   /// [request]：HTTP 请求闭包，由各方法传入
   /// [fromJson]：将原始 JSON 转为业务 Model 的回调
@@ -338,77 +405,88 @@ class ApiClient implements ApiService {
     try {
       // ---- 步骤 1：执行 HTTP 请求 ----
       final response = await request();
-      final data = response.data;
-
-      // ---- 步骤 2：解析响应数据 ----
-      // 如果后端返回标准 Map 格式（{code, message, data}），按 ApiResponse 解析
-      if (data is Map<String, dynamic>) {
-        final apiResponse = ApiResponse<T>.fromJson(data, fromJson);
-        // 检查业务 code 是否成功
-        if (!apiResponse.isSuccess) {
-          // 业务 code 失败（如账号冻结、余额不足），抛出 BusinessException
-          throw BusinessException(
-            code: apiResponse.code,
-            userMessage: apiResponse.message,
-          );
-        }
-        return apiResponse;
+      final apiResponse = _responseAdapter.adapt<T>(response, fromJson);
+      if (!apiResponse.isSuccess) {
+        throw BusinessException(
+          code: apiResponse.code,
+          userMessage: apiResponse.message,
+          canDisplayMessage: apiResponse.canDisplayMessage,
+        );
       }
-
-      // ---- 步骤 3：兼容非标准格式 ----
-      // 有些接口可能直接返回数组或字符串（如某些旧接口）
-      // 这种情况下包装为 ApiResponse，code 使用 HTTP 状态码
-      return ApiResponse<T>(
-        code: response.statusCode ?? 200,
-        message: response.statusMessage ?? 'success',
-        // fromJson 为空时直接把 data 当作 T 类型
-        data: fromJson == null ? data as T? : fromJson(data),
-      );
+      return apiResponse;
     } on DioException catch (error) {
-      // ---- 步骤 4：异常转换 ----
+      // ---- 步骤 4：网络异常转换 ----
       // 把 Dio 的异常转为 ApiException，ViewModel 不需要知道 Dio 的错误枚举
       throw ApiException.fromDioException(error);
+    } on ApiException {
+      rethrow;
+    } on Object catch (error) {
+      // decoder/协议不匹配不属于网络失败，转成稳定的协议错误交给上层解析。
+      throw ApiException(
+        code: ApiException.unknownError,
+        message: 'Response decoding failed: $error',
+      );
     }
   }
 
+  Options? _options(RequestContext? context, {bool forceNeverReplay = false}) {
+    if (context == null && !forceNeverReplay) return null;
+    return Options(
+      headers: {
+        ...?context?.headers,
+        if (context?.idempotencyKey != null)
+          'Idempotency-Key': context!.idempotencyKey,
+      },
+      extra: {
+        ...?context?.extra,
+        if (context?.requestId != null) 'requestId': context!.requestId,
+        if (context?.allowRetry ?? false) 'allowRetry': true,
+        if (forceNeverReplay ||
+            context?.replayPolicy == RequestReplayPolicy.never)
+          'replayDisabled': true,
+      },
+    );
+  }
+
+  void close() => _dio.close(force: true);
+
   // ==================== 拦截器管理 ====================
 
-  /// 重新组装拦截器链。
+  /// 创建稳定拦截器链，只在 ApiClient 构造时调用一次。
   ///
-  /// 调用时机：
-  /// - ApiClient 初始化时
-  /// - setTokenProvider 被调用时（token 提供者变了）
-  /// - setUnauthorizedCallback 被调用时（401 回调变了）
+  /// 调用时机只有 ApiClient 初始化。回调变化由闭包动态读取。
   ///
-  /// 拦截器顺序（重要，按添加顺序执行）：
-  /// 1. TokenInterceptor     → 请求前自动注入 Authorization header
-  /// 2. AppLogInterceptor     → 打印请求/响应日志
-  /// 3. UnauthorizedInterceptor → 捕获 401 错误（仅在设置了 onUnauthorized 时添加）
-  /// 4. RetryInterceptor      → 超时/连接异常时自动重试（放在最后，捕获前面传下来的错误）
-  void _resetInterceptors() {
-    // 清除所有旧拦截器
-    _dio.interceptors.clear();
+  /// 拦截器按下面的顺序添加：
+  /// 1. RequestMetadataInterceptor → 补充请求 ID
+  /// 2. TokenInterceptor           → 请求前动态注入 Authorization header
+  /// 3. AppLogInterceptor          → 向当前 LogSink 记录脱敏元数据
+  /// 4. UnauthorizedInterceptor    → 捕获 401，并尝试刷新与安全重放
+  /// 5. RetryInterceptor           → 按白名单重试临时网络错误
+  void _configureInterceptors() {
+    // 0. 请求追踪标识。
+    _dio.interceptors.add(RequestMetadataInterceptor());
 
     // 1. Token 注入（每次请求前动态读取 token）
     _dio.interceptors.add(
       TokenInterceptor(tokenProvider: () => _tokenProvider?.call()),
     );
 
-    // 2. 日志打印（debug 模式下打印请求/响应信息）
+    // 2. 脱敏网络日志。是否真正输出由 AppLogger 当前配置的 LogSink 决定。
     _dio.interceptors.add(AppLogInterceptor());
 
-    // 3. 401 处理（仅在设置了回调时添加）
-    if (_onUnauthorized != null) {
-      // 确保 _unauthorizedGuard 已创建
-      _unauthorizedGuard ??= UnauthorizedGuard(
-        onUnauthorized: _onUnauthorized!,
-      );
-      _dio.interceptors.add(
-        UnauthorizedInterceptor(guard: _unauthorizedGuard!),
-      );
-    }
+    // 3. 401 处理。闭包在真正发生 401 时读取最新刷新回调，不需要重建拦截器。
+    _dio.interceptors.add(
+      UnauthorizedInterceptor(
+        guard: _unauthorizedGuard,
+        dio: _dio,
+        refreshAccessToken: () async {
+          final callback = _refreshAccessToken;
+          return callback == null ? null : callback();
+        },
+      ),
+    );
 
-    // 4. 网络重试（放在最后，可以捕获前面所有拦截器传下来的网络错误）
+    // 4. 网络重试：默认只重试 GET/HEAD 的临时连接错误；写请求必须显式声明幂等。
     _dio.interceptors.add(RetryInterceptor(dio: _dio));
   }
 }

@@ -11,11 +11,13 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 import 'database_migrations.dart';
+import '../performance/performance_reporter.dart';
 
 /// App 本地数据库入口。
 ///
-/// main.dart 会在 runApp 前调用 AppDatabase.init()。
-/// 如果某些测试或特殊场景没有提前初始化，database getter 也会懒加载打开数据库。
+/// 这里不在 AppBootstrap 中提前打开数据库。
+/// databaseServiceProvider 第一次执行 CRUD 时才读取 [database]，因此没有数据库
+/// 需求的首屏不会被 SQLite 文件打开和迁移阻塞。
 class AppDatabase {
   const AppDatabase._();
 
@@ -24,23 +26,37 @@ class AppDatabase {
 
   /// 当前数据库实例。
   static Database? _database;
+  static Future<Database>? _opening;
 
   /// 初始化数据库。
   ///
   /// 多次调用是安全的：如果数据库已经打开，会直接复用已有实例。
   static Future<void> init() async {
-    _database ??= await _openDatabase();
+    await database;
   }
 
   /// 获取数据库实例。
   ///
-  /// 正常情况下 main.dart 已经完成初始化。
-  /// 这里保留懒加载，避免测试或特殊入口忘记初始化时直接崩溃。
+  /// 第一次读取时懒加载；后续读取复用同一个实例。
   static Future<Database> get database async {
-    if (_database == null) {
-      await init();
+    final opened = _database;
+    if (opened != null) return opened;
+
+    // 缓存“正在打开”的 Future。多个 Repository 首次并发 CRUD 时等待同一个
+    // openDatabase，不会同时打开同一文件或重复执行 migration。
+    final active = _opening;
+    if (active != null) return active;
+
+    final future = AppPerformance.measure('database.open', _openDatabase);
+    _opening = future;
+    try {
+      final database = await future;
+      _database = database;
+      return database;
+    } finally {
+      // 失败也要清理，下一次 invalidate/appDatabaseProvider 后可以真正重试。
+      if (identical(_opening, future)) _opening = null;
     }
-    return _database!;
   }
 
   /// 关闭数据库。
@@ -48,13 +64,14 @@ class AppDatabase {
   /// App 正常运行中一般不需要手动关闭。
   /// 测试或需要释放资源时可以调用。
   static Future<void> close() async {
-    final database = _database;
+    final database = _database ?? await _opening;
     if (database == null) {
       return;
     }
 
     await database.close();
     _database = null;
+    _opening = null;
   }
 
   /// 打开数据库文件并绑定迁移逻辑。

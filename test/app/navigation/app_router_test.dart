@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/app/navigation/app_router.dart';
+import 'package:riverpod_mvvm/app/navigation/app_route_bundle.dart';
 import 'package:riverpod_mvvm/app/navigation/route_guard.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
 
@@ -14,7 +15,8 @@ void main() {
     final refreshListenable = ChangeNotifier();
     final appRouter = AppRouter(
       refreshListenable: refreshListenable,
-      guards: [AuthRouteGuard(() => const AuthState())],
+      guards: [AuthRouteGuard(() => const AuthState.unauthenticated())],
+      routeBundle: const AppRouteBundle.starter(),
     );
     addTearDown(appRouter.config.dispose);
     addTearDown(refreshListenable.dispose);

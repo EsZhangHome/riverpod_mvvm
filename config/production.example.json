@@ -1,0 +1,9 @@
+{
+  "ENV_NAME": "production",
+  "ENV_APP_NAME": "Your App",
+  "ENV_API_BASE_URL": "https://replace-with-production-api.invalid",
+  "ENV_ENABLE_MOCK": false,
+  "ENV_IS_DEBUG": false,
+  "ENV_ENABLE_CHARLES_PROXY": false,
+  "ENV_ALLOW_CHARLES_BAD_CERTIFICATE": false
+}

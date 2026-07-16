@@ -9,6 +9,18 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+# examples 下的每个目录都是拥有独立 pubspec 与 package_config 的消费应用，
+# 必须在自己的工作目录执行 analyze。根分析只检查企业底座，避免干净检出后
+# 尚未对示例执行 pub get 时，把示例的 package import 误当成根包 URI。
+analyzer:
+  exclude:
+    - examples/**
+  language:
+    # 尽早暴露隐式 dynamic、泛型缺失和无法推断类型的问题，避免拖到运行时。
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`
@@ -22,8 +34,7 @@ linter:
   # `// ignore_for_file: name_of_lint` syntax on the line or in the file
   # producing the lint.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    unawaited_futures: true
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

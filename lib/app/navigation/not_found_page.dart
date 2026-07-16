@@ -8,7 +8,7 @@
 //
 // 交互逻辑：
 // - 展示"页面不存在"提示
-// - 提供"返回首页"按钮，点击后跳转到主页面
+// - 提供"返回首页"按钮，由登录守卫决定当前项目的真实首页
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -21,7 +21,9 @@ import '../../shared/navigation/route_paths.dart';
 /// 不直接返回空白页，而是提供友好的提示和返回首页的入口，
 /// 减少用户的迷路感。
 class NotFoundPage extends StatelessWidget {
-  const NotFoundPage({super.key});
+  const NotFoundPage({super.key, this.fallbackPath = RoutePaths.login});
+
+  final String fallbackPath;
 
   @override
   Widget build(BuildContext context) {
@@ -33,10 +35,11 @@ class NotFoundPage extends StatelessWidget {
             // 404 提示文案
             const Text(AppStrings.pageNotFound),
             const SizedBox(height: 16),
-            // 返回首页按钮
-            // RoutePaths.home 直接指向真实存在的商品 Tab 路由。
+            // 先进入登录路由：未登录用户停留在登录页；已登录用户会被
+            // AuthRouteGuard 重定向到当前路由包的 authenticatedHome。
+            // 因此 404 页面不需要依赖任何项目的具体业务首页。
             ElevatedButton(
-              onPressed: () => context.go(RoutePaths.home),
+              onPressed: () => context.go(fallbackPath),
               child: const Text(AppStrings.backHome),
             ),
           ],

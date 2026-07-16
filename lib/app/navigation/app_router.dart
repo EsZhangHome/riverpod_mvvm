@@ -1,116 +1,72 @@
 // lib/app/navigation/app_router.dart
 //
-// 作用：创建和配置 GoRouter 实例，管理所有页面路由声明和路由守卫。
-//
-// Tab 路由使用 StatefulShellRoute.indexedStack：
-// - 三个 Tab 分支共享同一个 MainShell 实例，切换不会销毁子页面
-// - GoRouter 的 StatefulNavigationShell 管理 Tab 状态，替代手写 IndexedStack + ViewModel
+// AppRouter 只负责“稳定底座路由 + 路由守卫 + 外部业务路由”的组装。
+// 它刻意不 import 任何具体业务 feature，保证底座路由器可以跨项目复用。
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/auth.dart';
-import '../../features/home/home.dart';
-import '../../features/learning/learning.dart';
-import '../../features/mine/mine.dart';
-import '../../features/orders/orders.dart';
-import 'main_shell.dart';
+import '../../shared/navigation/route_paths.dart';
 import '../../shared/ui/loading_view.dart';
+import '../starter/starter_page.dart';
+import 'app_route_bundle.dart';
 import 'not_found_page.dart';
 import 'route_guard.dart';
-import '../../shared/navigation/route_paths.dart';
 
-/// App 路由管理器。
+/// 持有当前 App Widget 生命周期内稳定的 GoRouter。
+///
+/// [routeBundle] 由项目入口提供。
+/// 这种构造注入让路由器依赖抽象配置，而不是依赖某个项目的具体页面。
 class AppRouter {
   AppRouter({
     required Listenable refreshListenable,
     required List<RouteGuard> guards,
-  }) : config = _createRouter(refreshListenable, guards);
+    required AppRouteBundle routeBundle,
+  }) : config = _createRouter(refreshListenable, guards, routeBundle);
 
+  /// GoRouter 必须长期持有，不能在 Widget 每次 build 时重新创建。
   final GoRouter config;
 
   static GoRouter _createRouter(
     Listenable refreshListenable,
     List<RouteGuard> guards,
+    AppRouteBundle routeBundle,
   ) {
     return GoRouter(
-      // StatefulShellRoute 默认进入第一个分支（首页 Tab）
-      initialLocation: RoutePaths.mainHome,
+      // 初始地址可以是受保护页面。未登录时 AuthRouteGuard 会立即转到登录页；
+      // 已恢复会话时则直接进入业务首页，避免先显示登录页再闪烁跳转。
+      initialLocation: routeBundle.authenticatedHome,
       refreshListenable: refreshListenable,
-
-      errorBuilder: (context, state) => const NotFoundPage(),
-
+      errorBuilder: (context, state) =>
+          NotFoundPage(fallbackPath: routeBundle.loginPath),
       redirect: (BuildContext context, GoRouterState state) {
-        // 守卫按注册顺序执行，第一个返回路径的守卫终止后续判断。
+        // 多个守卫按顺序组成责任链，第一个给出重定向地址的守卫生效。
         for (final guard in guards) {
           final redirectPath = guard.redirect(state);
           if (redirectPath != null) return redirectPath;
         }
         return null;
       },
-
       routes: [
+        // 以下是底座内置路由。真实项目通常替换登录页和 authenticatedHome；
+        // 未被导航到的 StarterPage 不会进入业务页面栈。
         GoRoute(
-          path: RoutePaths.login,
-          builder: (context, state) => const LoginPage(),
+          path: routeBundle.loginPath,
+          builder:
+              routeBundle.loginBuilder ?? (context, state) => const LoginPage(),
         ),
         GoRoute(
           path: RoutePaths.splash,
           builder: (context, state) => const Scaffold(body: LoadingView()),
         ),
         GoRoute(
-          path: RoutePaths.riverpodLearning,
-          // 学习中心在 Shell 外，返回时恢复“我的”页面的原分支状态。
-          builder: (context, state) => const RiverpodLearningPage(),
+          path: RoutePaths.starter,
+          builder: (context, state) => const StarterPage(),
         ),
 
-        // 主框架：StatefulShellRoute 管理三个 Tab 分支
-        // GoRouter 的 StatefulNavigationShell 保证子页面不会因为 Tab 切换而销毁
-        StatefulShellRoute.indexedStack(
-          builder: (context, state, navigationShell) =>
-              MainShell(navigationShell: navigationShell),
-          branches: [
-            // Tab 0：商品目录与购物车
-            StatefulShellBranch(
-              routes: [
-                GoRoute(
-                  path: RoutePaths.mainHome,
-                  builder: (context, state) => const HomePage(),
-                  routes: [
-                    GoRoute(
-                      // 子路由只写相对片段，完整地址为 /main/home/cart。
-                      path: RoutePaths.cartSegment,
-                      builder: (context, state) => const CartPage(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            // Tab 1：订单列表与订单生命周期
-            StatefulShellBranch(
-              routes: [
-                GoRoute(
-                  path: RoutePaths.mainOrders,
-                  builder: (context, state) => const OrdersPage(),
-                ),
-              ],
-            ),
-            // Tab 2：我的与设置
-            StatefulShellBranch(
-              routes: [
-                GoRoute(
-                  path: RoutePaths.mainMine,
-                  builder: (context, state) => const MinePage(),
-                ),
-              ],
-            ),
-          ],
-        ),
-        // 兼容业务代码或外部深链中的 /main，避免它落入 404 页面。
-        GoRoute(
-          path: RoutePaths.main,
-          redirect: (context, state) => RoutePaths.mainHome,
-        ),
+        // 展开业务路由。底座默认是空列表；真实项目在入口层提供。
+        ...routeBundle.routes,
       ],
     );
   }

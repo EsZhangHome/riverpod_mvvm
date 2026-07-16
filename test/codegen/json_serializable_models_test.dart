@@ -4,7 +4,6 @@
 // 后续新增 Model 时，可以参考这些写法。
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:riverpod_mvvm/features/home/model/home_banner.dart';
 import 'package:riverpod_mvvm/features/auth/model/login_request.dart';
 import 'package:riverpod_mvvm/features/auth/model/user_model.dart';
 
@@ -23,20 +22,6 @@ void main() {
       expect(user.id, '1');
       expect(user.name, 'Test User');
       expect(user.toJson()['email'], 'test@example.com');
-    });
-
-    test('home banner uses generated toJson', () {
-      const banner = HomeBanner(
-        id: 'banner_1',
-        title: 'Banner',
-        imageUrl: 'https://example.com/banner.png',
-      );
-
-      expect(banner.toJson(), {
-        'id': 'banner_1',
-        'title': 'Banner',
-        'imageUrl': 'https://example.com/banner.png',
-      });
     });
 
     test('login request uses generated toJson', () {

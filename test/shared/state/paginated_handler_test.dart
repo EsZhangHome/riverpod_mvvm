@@ -1,7 +1,7 @@
 // PaginatedListHandler 测试。
 //
-// 重点验证分页状态转移和 CancelToken 确实进入 fetchPage；这样未来接入真实
-// Repository 时，不会出现“Provider 销毁了，但 Dio 请求仍在后台执行”。
+// 测试除了基本分页，还覆盖两个容易被忽略的并发问题：请求完成时必须读取最新
+// State；刷新开始后，旧的“加载更多”结果不能再覆盖新列表。
 
 import 'dart:async';
 
@@ -11,50 +11,109 @@ import 'package:riverpod_mvvm/shared/state/paginated_handler.dart';
 import 'package:riverpod_mvvm/shared/state/view_state.dart';
 
 void main() {
-  test('refresh passes token and replaces the first page', () async {
+  test('refresh passes a token and replaces the first page', () async {
     final handler = PaginatedListHandler<int>();
     addTearDown(handler.dispose);
+    var current = PaginatedListState<int>(items: [99]);
     final states = <PaginatedListState<int>>[];
 
     await handler.refresh(
       fetchPage: (page, cancelToken) async {
         expect(page, 1);
-        expect(identical(cancelToken, handler.cancelToken), isTrue);
+        expect(cancelToken.isCancelled, isFalse);
         return [1, 2];
       },
-      currentState: const PaginatedListState<int>(items: [99]),
-      onStateChanged: states.add,
+      readState: () => current,
+      onStateChanged: (next) {
+        current = next;
+        states.add(next);
+      },
       pageSize: 2,
     );
 
     expect(states.first.isRefreshing, isTrue);
-    expect(states.last.viewState, ViewState.success);
-    expect(states.last.items, [1, 2]);
-    expect(states.last.hasMore, isTrue);
+    expect(current.viewState, ViewState.success);
+    expect(current.items, [1, 2]);
+    expect(current.hasMore, isTrue);
   });
 
   test('loadMore appends data and advances page', () async {
     final handler = PaginatedListHandler<int>();
     addTearDown(handler.dispose);
-    final states = <PaginatedListState<int>>[];
+    var current = PaginatedListState<int>(
+      viewState: ViewState.success,
+      items: [1, 2],
+    );
 
     await handler.loadMore(
       fetchPage: (page, _) async {
         expect(page, 2);
         return [3];
       },
-      currentState: const PaginatedListState<int>(
-        viewState: ViewState.success,
-        items: [1, 2],
-      ),
-      onStateChanged: states.add,
+      readState: () => current,
+      onStateChanged: (next) => current = next,
       pageSize: 2,
     );
 
-    expect(states.last.items, [1, 2, 3]);
-    expect(states.last.page, 2);
-    expect(states.last.hasMore, isFalse);
-    expect(states.last.isLoadingMore, isFalse);
+    expect(current.items, [1, 2, 3]);
+    expect(current.page, 2);
+    expect(current.hasMore, isFalse);
+    expect(current.isLoadingMore, isFalse);
+  });
+
+  test(
+    'loadMore merges into the latest state instead of a stale snapshot',
+    () async {
+      final handler = PaginatedListHandler<int>();
+      addTearDown(handler.dispose);
+      final response = Completer<List<int>>();
+      var current = PaginatedListState<int>(
+        viewState: ViewState.success,
+        items: [1],
+      );
+
+      final request = handler.loadMore(
+        fetchPage: (_, _) => response.future,
+        readState: () => current,
+        onStateChanged: (next) => current = next,
+      );
+      // 模拟请求期间 WebSocket 推送或乐观更新写入的新数据。
+      current = current.copyWith(items: [1, 99]);
+      response.complete([2]);
+      await request;
+
+      expect(current.items, [1, 99, 2]);
+    },
+  );
+
+  test('refresh cancels active loadMore and drops its late result', () async {
+    final handler = PaginatedListHandler<int>();
+    addTearDown(handler.dispose);
+    final loadMoreStarted = Completer<CancelToken>();
+    var current = PaginatedListState<int>(
+      viewState: ViewState.success,
+      items: [1],
+    );
+
+    final loadMore = handler.loadMore(
+      fetchPage: (_, token) async {
+        loadMoreStarted.complete(token);
+        await token.whenCancel;
+        return [2];
+      },
+      readState: () => current,
+      onStateChanged: (next) => current = next,
+    );
+    final oldToken = await loadMoreStarted.future;
+    await handler.refresh(
+      fetchPage: (_, _) async => [10],
+      readState: () => current,
+      onStateChanged: (next) => current = next,
+    );
+    await loadMore;
+
+    expect(oldToken.isCancelled, isTrue);
+    expect(current.items, [10]);
   });
 
   test(
@@ -62,6 +121,7 @@ void main() {
     () async {
       final handler = PaginatedListHandler<int>();
       final requestStarted = Completer<CancelToken>();
+      var current = PaginatedListState<int>();
       final states = <PaginatedListState<int>>[];
 
       final request = handler.refresh(
@@ -70,8 +130,11 @@ void main() {
           await cancelToken.whenCancel;
           return [1];
         },
-        currentState: const PaginatedListState<int>(),
-        onStateChanged: states.add,
+        readState: () => current,
+        onStateChanged: (next) {
+          current = next;
+          states.add(next);
+        },
       );
       final token = await requestStarted.future;
       handler.dispose();
@@ -86,16 +149,16 @@ void main() {
   test('unknown errors use a user-safe message', () async {
     final handler = PaginatedListHandler<int>();
     addTearDown(handler.dispose);
-    final states = <PaginatedListState<int>>[];
+    var current = PaginatedListState<int>();
 
     await handler.refresh(
       fetchPage: (_, _) => throw StateError('database password'),
-      currentState: const PaginatedListState<int>(),
-      onStateChanged: states.add,
+      readState: () => current,
+      onStateChanged: (next) => current = next,
     );
 
-    expect(states.last.viewState, ViewState.error);
-    expect(states.last.errorMessage, '请求失败，请稍后重试');
-    expect(states.last.errorMessage, isNot(contains('database password')));
+    expect(current.viewState, ViewState.error);
+    expect(current.errorMessage, '请求失败，请稍后重试');
+    expect(current.errorMessage, isNot(contains('database password')));
   });
 }

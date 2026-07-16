@@ -1,59 +1,72 @@
 // test/widget_test.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_mvvm/app/app.dart';
+import 'package:riverpod_mvvm/features/auth/auth.dart';
 import 'package:riverpod_mvvm/shared/localization/app_strings.dart';
 import 'package:riverpod_mvvm/shared/navigation/route_paths.dart';
-import 'package:riverpod_mvvm/core/storage/local_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+final class _MemorySessionStore implements SessionStore {
+  _MemorySessionStore(this.session);
+
+  AuthSession? session;
+
+  @override
+  Future<AuthSession?> read() async => session;
+
+  @override
+  Future<void> write(AuthSession value) async => session = value;
+
+  @override
+  Future<void> clear() async => session = null;
+}
 
 void main() {
   testWidgets('app starts at login page when there is no token', (
     tester,
   ) async {
-    // Arrange：明确设置空存储，避免测试受本机历史数据影响。
-    SharedPreferences.setMockInitialValues({});
-    FlutterSecureStorage.setMockInitialValues({});
-    await LocalStorage.init();
+    // Arrange：注入空会话，测试不依赖设备 Keychain/Keystore 插件。
+    final store = _MemorySessionStore(null);
 
     // Act：挂载完整 App，ProviderScope、AuthNotifier、GoRouter 都走生产组装路径。
-    await tester.pumpWidget(const ProviderScope(child: MyApp()));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sessionStoreProvider.overrideWithValue(store)],
+        child: const MyApp(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('登录'), findsWidgets);
-    expect(find.text('MVVM Demo'), findsOneWidget);
+    expect(find.text('Riverpod MVVM'), findsOneWidget);
 
-    // 未登录时，未来新增的任意 /main/* 深层路由也必须统一被守卫拦截。
-    tester
-        .element(find.text(AppStrings.login).first)
-        .go('${RoutePaths.mainOrders}/order-1');
+    // Starter 是底座默认的受保护占位页，未登录时必须被守卫拦截。
+    tester.element(find.text(AppStrings.login).first).go(RoutePaths.starter);
     await tester.pumpAndSettle();
     expect(find.text(AppStrings.login), findsWidgets);
     expect(find.text(AppStrings.pageNotFound), findsNothing);
 
-    // 学习中心同样属于登录后的功能，未登录深链访问必须被拦截。
-    tester
-        .element(find.text(AppStrings.login).first)
-        .go(RoutePaths.riverpodLearning);
-    await tester.pumpAndSettle();
-    expect(find.text(AppStrings.login), findsWidgets);
-    expect(find.text(AppStrings.learningCenterTitle), findsNothing);
+    // 默认 MyApp 只注册底座页面，具体业务路由必须由项目入口显式注入。
   });
 
   testWidgets('app does not paint login page while restoring saved session', (
     tester,
   ) async {
-    // Arrange：同时准备 token 和用户 JSON，模拟上一次已登录。
-    SharedPreferences.setMockInitialValues({
-      'current_user':
-          '{"id":"1","name":"Test User","email":"test@example.com"}',
-    });
-    FlutterSecureStorage.setMockInitialValues({'auth_token': 'saved_token'});
-    await LocalStorage.init();
+    // Arrange：准备一份完整会话，模拟上一次已登录。
+    final store = _MemorySessionStore(
+      const AuthSession(
+        token: 'saved_token',
+        user: UserModel(id: '1', name: 'Test User', email: 'test@example.com'),
+      ),
+    );
 
-    await tester.pumpWidget(const ProviderScope(child: MyApp()));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sessionStoreProvider.overrideWithValue(store)],
+        child: const MyApp(),
+      ),
+    );
     await tester.pump();
 
     expect(find.text('登录'), findsNothing);

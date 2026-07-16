@@ -3,43 +3,46 @@
 // 作用：定义网络服务的抽象接口，Repository 层依赖此接口而非具体实现。
 //
 // 架构职责：
-// - 定义所有 HTTP 方法的签名（get/post/put/delete/upload）
+// - 定义所有 HTTP 方法的签名（get/post/put/patch/delete/upload/download）
 // - 让 Repository 依赖抽象而非具体实现（依赖倒置原则）
 // - 测试时可以用 FakeApiService 替换真实的 ApiClient
 //
 // 设计要点：
 // 1. 每个方法都支持泛型 <T>，通过 fromJson 回调把原始 JSON 转成业务 Model
-// 2. 每个方法都支持 CancelToken，由 ViewModel 透传以支持页面销毁时取消请求
-// 3. 所有方法返回 ApiResponse<T>，统一了成功和失败的响应结构
+// 2. 每个方法都支持 CancelToken，ViewModel 可把它绑定到 Provider 生命周期
+// 3. 数据请求返回 ApiResponse<T>；无业务响应体的下载返回 Future<void>
 // 4. upload 方法单独处理文件上传，因为文件上传需要 FormData 和进度回调
 //
 // 为什么需要这个接口：
 // - 测试时不需要启动真实服务器，传入 FakeApiService 即可
-// - 未来如果换网络库（如从 Dio 换成 http），只需要改 ApiClient 实现
-// - Repository 不直接依赖 Dio，降低耦合度
+// - Repository 不接触 Dio 实例、Options、Interceptor 和 DioException
+// - CancelToken/ProgressCallback 仍是刻意保留的 Dio 生命周期类型；若未来彻底
+//   更换网络库，需要先在本接口抽象取消令牌与进度回调，再迁移 Repository 签名
 
 import 'package:dio/dio.dart';
 
 import 'api_response.dart';
+import 'request_context.dart';
 
 /// 网络服务抽象接口。
 ///
-/// Repository 依赖这个接口，而不是直接依赖 ApiClient 或 Dio。
+/// Repository 依赖这个接口，而不是直接操作 ApiClient 或 Dio 实例。
 /// 这样做的好处：
 /// 1. 单元测试时可以传入 FakeApiService，不需要真实网络请求
-/// 2. 未来换网络库时，只需要改 ApiClient 实现，Repository 不用动
-/// 3. 符合依赖倒置原则：高层模块（Repository）不依赖低层模块（Dio）
+/// 2. HTTP 调用、响应适配和异常转换可以集中替换，不散落到 Repository
+/// 3. Repository 只保留 CancelToken/ProgressCallback 的受控类型耦合
 abstract class ApiService {
   /// GET 请求：通常用于获取列表、详情等读取类接口。
   ///
   /// [path]：接口路径（不含 baseUrl），如 '/home/banners'
   /// [queryParameters]：URL 查询参数，如 ?page=1&size=10
-  /// [cancelToken]：取消令牌，页面销毁时 ViewModel 会取消请求
+  /// [cancelToken]：取消令牌；通常由 ViewModel 创建，并在 `ref.onDispose` 中取消
   /// [fromJson]：将原始 JSON 转为业务 Model 的回调，如 (json) => UserModel.fromJson(json)
   Future<ApiResponse<T>> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
     CancelToken? cancelToken,
+    RequestContext? context,
     T Function(dynamic json)? fromJson,
   });
 
@@ -55,18 +58,31 @@ abstract class ApiService {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     CancelToken? cancelToken,
+    RequestContext? context,
     T Function(dynamic json)? fromJson,
   });
 
   /// PUT 请求：通常用于完整更新资源。
   ///
   /// 参数说明同 POST。
-  /// 与 POST 的区别：PUT 是幂等的（多次调用结果相同），POST 不是。
+  /// HTTP 语义上 PUT 应设计为幂等；后端仍需正确实现，客户端不能仅凭方法名
+  /// 假定重复提交一定安全。
   Future<ApiResponse<T>> put<T>(
     String path, {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     CancelToken? cancelToken,
+    RequestContext? context,
+    T Function(dynamic json)? fromJson,
+  });
+
+  /// PATCH 请求：只更新资源的部分字段。
+  Future<ApiResponse<T>> patch<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    CancelToken? cancelToken,
+    RequestContext? context,
     T Function(dynamic json)? fromJson,
   });
 
@@ -81,6 +97,7 @@ abstract class ApiService {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     CancelToken? cancelToken,
+    RequestContext? context,
     T Function(dynamic json)? fromJson,
   });
 
@@ -100,6 +117,17 @@ abstract class ApiService {
     Map<String, dynamic>? data,
     ProgressCallback? onSendProgress,
     CancelToken? cancelToken,
+    RequestContext? context,
     T Function(dynamic json)? fromJson,
+  });
+
+  /// 下载文件到 [savePath]，支持进度回调和生命周期取消。
+  Future<void> download(
+    String path,
+    String savePath, {
+    Map<String, dynamic>? queryParameters,
+    ProgressCallback? onReceiveProgress,
+    CancelToken? cancelToken,
+    RequestContext? context,
   });
 }

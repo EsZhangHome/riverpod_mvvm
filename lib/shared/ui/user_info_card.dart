@@ -1,6 +1,6 @@
 // lib/shared/ui/user_info_card.dart
 //
-// 作用：用户信息卡片组件，展示头像、昵称、邮箱。MinePage 和 ProfilePage 共用。
+// 作用：用户信息卡片组件，展示头像、昵称、邮箱。账户页、侧边栏等位置都可复用。
 //
 // 使用方式：
 // ```dart

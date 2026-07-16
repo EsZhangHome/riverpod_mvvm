@@ -3,10 +3,11 @@
 // 作用：定义 Dio 的拦截器链，包括 Token 注入、日志打印、401 处理、网络重试。
 //
 // 拦截器链顺序（按添加顺序执行）：
-// 1. TokenInterceptor     → 请求前自动注入 Authorization header
-// 2. AppLogInterceptor     → 请求/响应/错误时打印日志
-// 3. UnauthorizedInterceptor → 捕获 401 错误，通知 AuthProvider 退出登录
-// 4. RetryInterceptor      → 超时/连接异常时自动重试
+// 1. RequestMetadataInterceptor → 补齐 requestId
+// 2. TokenInterceptor           → 请求前自动注入 Authorization header
+// 3. AppLogInterceptor          → 请求/响应/错误时记录脱敏日志
+// 4. UnauthorizedInterceptor   → 捕获 401，协调刷新、重放或通知会话失效
+// 5. RetryInterceptor          → 超时/连接异常时按安全规则重试
 //
 // 设计要点：
 // - 拦截器之间通过责任链模式传递，每个拦截器处理完后调用 handler.next()
@@ -14,10 +15,37 @@
 // - UnauthorizedGuard 防止多个并发 401 重复触发 logout
 // - RetryInterceptor 只对超时和连接异常重试，不重试业务错误和 401
 
+import 'dart:developer' as developer;
+
 import 'package:dio/dio.dart';
 
 import '../config/env_config.dart';
+import '../performance/performance_reporter.dart';
 import '../utils/logger.dart';
+import 'token_refresh_coordinator.dart';
+
+// ==================== 0. 请求追踪 ====================
+
+/// 为每次请求补齐可追踪的 requestId。
+///
+/// Repository 已通过 RequestContext 提供 id 时原样透传；没有时在客户端生成。
+/// 同一个 id 同时放进 Header 和 Dio extra：服务端能串联日志，客户端拦截器也能读取。
+class RequestMetadataInterceptor extends Interceptor {
+  static int _sequence = 0;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    final supplied = options.extra['requestId']?.toString();
+    final requestId = supplied?.isNotEmpty == true
+        ? supplied!
+        : '${DateTime.now().microsecondsSinceEpoch}-${_sequence++}';
+    // putIfAbsent 尊重调用方显式提供的 X-Request-Id，不在基础设施层悄悄覆盖。
+    options.extra['requestId'] = requestId;
+    options.extra['requestStartedMicros'] = developer.Timeline.now;
+    options.headers.putIfAbsent('X-Request-Id', () => requestId);
+    handler.next(options);
+  }
+}
 
 // ==================== 1. Token 注入拦截器 ====================
 
@@ -35,7 +63,7 @@ import '../utils/logger.dart';
 class TokenInterceptor extends Interceptor {
   TokenInterceptor({required this.tokenProvider});
 
-  /// token 提供者，通常由 AuthProvider 注入。
+  /// token 提供者，由上层组合代码注入；拦截器不知道具体认证状态实现。
   /// 返回 null 表示未登录，返回字符串表示当前 token。
   final String? Function() tokenProvider;
 
@@ -54,19 +82,22 @@ class TokenInterceptor extends Interceptor {
 
 // ==================== 2. 日志拦截器 ====================
 
-/// 简单日志拦截器，仅在 debug 模式下打印请求和响应信息。
+/// 脱敏网络日志拦截器，把记录交给当前配置的 AppLogger。
 ///
 /// 打印内容：
-/// - 请求：HTTP 方法和完整 URL
-/// - 响应：HTTP 状态码和 URL
-/// - 错误：HTTP 状态码和错误信息
+/// - 请求：HTTP 方法、服务地址和路径（不含用户信息、Query、Fragment）
+/// - 响应：HTTP 状态码和安全路径
+/// - 错误：Dio 错误类型、HTTP 状态码和安全路径
 ///
 /// 注意：不打印请求体和响应体，避免敏感信息泄露到日志中。
 class AppLogInterceptor extends Interceptor {
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     // 只打印方法和 URL，不打印 headers（含 token）和请求体（可能含密码）
-    AppLogger.log('${options.method} ${options.uri}');
+    AppLogger.info(
+      '${options.method} ${_safeUri(options.uri)}',
+      context: {'requestId': options.extra['requestId']},
+    );
     handler.next(options);
   }
 
@@ -75,22 +106,61 @@ class AppLogInterceptor extends Interceptor {
     Response<dynamic> response,
     ResponseInterceptorHandler handler,
   ) {
+    _recordTiming(response.requestOptions, response.statusCode);
     // 打印状态码和 URL，方便排查接口是否正常返回
-    AppLogger.log(
-      'Response ${response.statusCode}: ${response.requestOptions.uri}',
+    AppLogger.info(
+      'Response ${response.statusCode}: '
+      '${_safeUri(response.requestOptions.uri)}',
+      context: {'requestId': response.requestOptions.extra['requestId']},
     );
     handler.next(response);
   }
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    // 打印错误状态码和错误信息，方便排查网络问题
-    AppLogger.log('Dio error ${err.response?.statusCode}: ${err.message}');
+    _recordTiming(err.requestOptions, err.response?.statusCode);
+    // 不附加原始 DioException：它可能间接包含 Header、请求体或响应体。
+    AppLogger.warning(
+      'Dio ${err.type.name} ${err.response?.statusCode ?? '-'}: '
+      '${_safeUri(err.requestOptions.uri)}',
+      context: {
+        'requestId': err.requestOptions.extra['requestId'],
+        'errorType': err.type.name,
+        'statusCode': err.response?.statusCode,
+      },
+    );
     handler.next(err);
+  }
+
+  /// Query 和 fragment 经常包含搜索词、手机号或业务编号，日志只保留服务地址和路径。
+  String _safeUri(Uri uri) {
+    if (!uri.hasScheme) return uri.path;
+    // 手工重建是为了同时排除 userInfo。直接打印 Uri 可能泄露 Basic Auth，
+    // replace(query: '') 还会留下无意义的 ?#，影响日志检索聚合。
+    final host = uri.host.contains(':') ? '[${uri.host}]' : uri.host;
+    final port = uri.hasPort ? ':${uri.port}' : '';
+    return '${uri.scheme}://$host$port${uri.path}';
+  }
+
+  void _recordTiming(RequestOptions request, int? statusCode) {
+    final started = request.extra['requestStartedMicros'];
+    if (started is! int) return;
+    final elapsedMicros = developer.Timeline.now - started;
+    if (elapsedMicros < 0) return;
+    AppPerformance.record(
+      'network.request',
+      Duration(microseconds: elapsedMicros),
+      attributes: {
+        'method': request.method,
+        'path': request.uri.path,
+        'statusCode': statusCode,
+        'retryIndex': request.extra['retryIndex'] ?? 0,
+      },
+    );
   }
 }
 
-// ==================== 3. 401 防抖守卫 ====================
+// ==================== 3. 401 会话失效去重守卫 ====================
 
 /// 401 并发保护器。
 ///
@@ -105,7 +175,7 @@ class AppLogInterceptor extends Interceptor {
 class UnauthorizedGuard {
   UnauthorizedGuard({required this.onUnauthorized});
 
-  /// 401 时的回调，通常由 AuthProvider 注入，执行 logout 逻辑。
+  /// 会话确定失效时的回调，通常由组合层绑定退出登录命令。
   final Future<void> Function() onUnauthorized;
 
   /// 是否正在处理 401，防止并发重复触发。
@@ -130,7 +200,7 @@ class UnauthorizedGuard {
 
   /// 重置 401 处理状态。
   ///
-  /// 用户重新登录后调用，允许下一次 token 失效时再次响应 401。
+  /// 用户重新登录或成功恢复会话后调用，允许下一次失效再次响应 401。
   void reset() {
     _isHandling = false;
   }
@@ -141,43 +211,86 @@ class UnauthorizedGuard {
 /// 统一处理 401 未授权错误。
 ///
 /// 工作流程：
-/// 1. 捕获响应错误，检查 HTTP 状态码是否为 401
-/// 2. 如果是 401，通过 UnauthorizedGuard 通知 AuthProvider 退出登录
-/// 3. 无论是否 401，都调用 handler.next(err) 继续传递错误
+/// 1. 非 401 直接传递；
+/// 2. 首次 401 尝试共享的 Token 刷新；
+/// 3. 刷新成功且请求允许重放时，只重放一次；
+/// 4. 未配置刷新、刷新失败或重放后仍为 401 时，通过 Guard 通知会话失效；
+/// 5. replayDisabled 请求即使刷新成功也不自动重放，原 401 交给调用方处理。
 ///
 /// 设计原则：
 /// - 网络层只做"通知"，不直接操作路由或用户状态
-/// - 真正的退出登录逻辑在 AuthProvider 中
-/// - 401 错误仍然会继续传递，让调用方也能感知到错误
+/// - 真正的退出登录逻辑由上层回调实现，网络层不 import 认证模块
+/// - 只有重放成功时 resolve 响应，其余 401 继续传递给调用方
 class UnauthorizedInterceptor extends Interceptor {
-  UnauthorizedInterceptor({required this.guard});
+  UnauthorizedInterceptor({
+    required this.guard,
+    required this.dio,
+    this.refreshAccessToken,
+    TokenRefreshCoordinator? refreshCoordinator,
+  }) : refreshCoordinator = refreshCoordinator ?? TokenRefreshCoordinator();
 
-  /// 401 防抖守卫，确保多个并发 401 只处理一次。
+  /// 会话失效守卫，确保一批 401 只触发一次退出处理。
   final UnauthorizedGuard guard;
+  final Dio dio;
+  final RefreshAccessToken? refreshAccessToken;
+  final TokenRefreshCoordinator refreshCoordinator;
 
   @override
   Future<void> onError(
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    // 检查 HTTP 状态码是否为 401
-    if (err.response?.statusCode == 401) {
-      // 通过 guard 通知 AuthProvider，内部有防抖保护
-      await guard.handle();
+    if (err.response?.statusCode != 401) {
+      handler.next(err);
+      return;
     }
-    // 无论是否处理 401，都继续传递错误
-    handler.next(err);
+
+    final request = err.requestOptions;
+    if (request.extra['authRetried'] == true || refreshAccessToken == null) {
+      await guard.handle();
+      handler.next(err);
+      return;
+    }
+
+    try {
+      final token = await refreshCoordinator.run(refreshAccessToken!);
+      if (token == null || token.isEmpty) {
+        await guard.handle();
+        handler.next(err);
+        return;
+      }
+
+      if (request.extra['replayDisabled'] == true) {
+        // Token 已刷新，可供下一次手动请求使用；当前流式或敏感请求不自动重放。
+        handler.next(err);
+        return;
+      }
+
+      request.extra['authRetried'] = true;
+      request.headers['Authorization'] = 'Bearer $token';
+      final response = await dio.fetch<dynamic>(request);
+      handler.resolve(response);
+    } on Object catch (error) {
+      // 刷新异常可能携带 Header、响应体等隐私数据，只记录异常类型用于聚合。
+      AppLogger.warning(
+        'Token refresh failed',
+        context: {'errorType': error.runtimeType.toString()},
+      );
+      await guard.handle();
+      handler.next(err);
+    }
   }
 }
 
 // ==================== 5. 重试拦截器 ====================
 
-/// 超时或连接异常自动重试拦截器。
+/// 对满足幂等条件的超时或连接异常执行有限重试。
 ///
-/// 适用场景：弱网环境下偶发的超时或连接失败，通过重试提高成功率。
+/// 适用场景：弱网环境下 GET/HEAD 偶发超时或连接失败；其他方法只有在调用方
+/// 确认服务端支持幂等并设置 `RequestContext.allowRetry` 后才允许重试。
 ///
 /// 不适用场景：
-/// - 业务错误（4xx）：重试不会改变结果，不需要重试
+/// - HTTP 客户端错误（4xx）：重复发送通常不会改变结果
 /// - 服务器错误（5xx）：可能是服务器问题，重试可能加重服务器负担
 /// - 请求取消：用户主动取消，不应该重试
 ///
@@ -185,10 +298,15 @@ class UnauthorizedInterceptor extends Interceptor {
 /// - 最多重试 retryCount 次（默认 2 次，可通过 EnvConfig 配置）
 /// - 退避等待：第 1 次重试等 1 秒，第 2 次等 2 秒
 /// - 使用 dio.fetch 复用原始 RequestOptions，保持参数不变
+/// - replayDisabled 请求不参与重试
 class RetryInterceptor extends Interceptor {
   RetryInterceptor({required this.dio, int? retryCount, List<int>? retryDelays})
     : retryCount = retryCount ?? EnvConfig.retryCount,
-      retryDelays = retryDelays ?? const [1, 2];
+      retryDelays = retryDelays ?? const [1, 2] {
+    if (this.retryDelays.isEmpty) {
+      throw ArgumentError.value(retryDelays, 'retryDelays', '不能为空');
+    }
+  }
 
   /// Dio 实例，用于重新发起请求。
   final Dio dio;
@@ -205,7 +323,7 @@ class RetryInterceptor extends Interceptor {
     ErrorInterceptorHandler handler,
   ) async {
     // ---- 步骤 1：判断是否应该重试 ----
-    // 只有超时和连接失败才重试，业务错误、401、取消等不重试
+    // 除了错误类型，还会检查请求方法、幂等声明与 replayDisabled 标记。
     if (!_shouldRetry(err)) {
       handler.next(err);
       return;
@@ -262,6 +380,7 @@ class RetryInterceptor extends Interceptor {
   /// - cancel：用户主动取消
   /// - unknown：无法确定原因，不冒险重试
   bool _shouldRetry(DioException err) {
+    if (err.requestOptions.extra['replayDisabled'] == true) return false;
     const retryableMethods = {'GET', 'HEAD'};
     final explicitlyRetryable = err.requestOptions.extra['allowRetry'] == true;
     if (!retryableMethods.contains(err.requestOptions.method.toUpperCase()) &&
@@ -279,6 +398,11 @@ class RetryInterceptor extends Interceptor {
       case DioExceptionType.badResponse:
       case DioExceptionType.cancel:
       case DioExceptionType.unknown:
+        return false;
+      // 新增异常类型默认不重试。自动重放请求必须采用白名单，而不是把未来
+      // 未知错误当成临时网络问题，尤其要避免非幂等写请求被重复发送。
+      // ignore: unreachable_switch_default
+      default:
         return false;
     }
   }

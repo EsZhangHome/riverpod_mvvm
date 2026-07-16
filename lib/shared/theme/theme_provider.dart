@@ -44,8 +44,9 @@ class ThemeNotifier extends Notifier<ThemeState> {
 
   @override
   ThemeState build() {
-    // LocalStorage 已在 runApp 前初始化，而且读取是同步的。直接用持久化结果
-    // 构造首个 State，可以避免 App 先显示浅色再异步闪到深色。
+    // LocalStorage 已由 BootstrapGate 尝试初始化，而且读取 API 是同步的。
+    // 直接用持久化结果构造首个 State，可以避免 App 先显示浅色再闪到深色；
+    // 存储降级时 getString 返回 null，主题安全回退到 light。
     final savedMode = LocalStorage.getString(_themeKey);
     return ThemeState(
       themeMode: savedMode == 'dark' ? ThemeMode.dark : ThemeMode.light,

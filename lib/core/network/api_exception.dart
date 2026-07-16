@@ -5,31 +5,35 @@
 // 异常层次：
 // ApiException（基类：网络层统一异常）
 //   ├── 由 ApiException.fromDioException 创建（网络/超时/服务器等底层异常）
-//   └── BusinessException（业务异常：后端返回的业务错误，如余额不足、权限不够）
+//   └── BusinessException（响应协议已成功解析，但业务 code 表示失败）
 //
 // 设计要点：
 // 1. ViewModel 只需要捕获 ApiException，不需要 import Dio
-// 2. BusinessException 携带 userMessage，可以直接展示给用户
+// 2. BusinessException 携带后端确认可展示的 userMessage
 // 3. 错误码使用负数常量，避免与 HTTP 状态码和后端业务码冲突
-// 4. fromDioException 把 DioExceptionType 枚举转为用户可读的文案
+// 4. fromDioException 把 DioExceptionType 转成稳定 FailureKind；展示文案由 shared 解析
 
 import 'package:dio/dio.dart';
 
-import 'network_error_messages.dart';
+import '../errors/app_failure.dart';
 
 /// 网络层统一异常。
 ///
 /// ViewModel 只关心 code 和 message，不需要知道 Dio 的复杂错误类型。
 /// 所有网络相关异常最终都会转换为 ApiException 或其子类。
-class ApiException implements Exception {
-  const ApiException({required this.code, required this.message});
+class ApiException extends AppFailure {
+  const ApiException({
+    required this.code,
+    required this.message,
+    super.kind = FailureKind.protocol,
+  }) : super(debugMessage: message, failureCode: code);
 
   /// 错误码。
   /// 正数：HTTP 状态码或后端业务码
   /// 负数：客户端自定义错误码（见下方常量）
   final int code;
 
-  /// 错误提示文案，可以直接展示给用户。
+  /// 技术错误描述，用于日志与诊断，不应绕过 FailureMessageResolver 直接展示。
   final String message;
 
   // ==================== 客户端自定义错误码（负数，避免与正数 HTTP 码冲突） ====================
@@ -53,9 +57,9 @@ class ApiException implements Exception {
 
   /// 工厂方法：从 DioException 创建 ApiException。
   ///
-  /// 把 Dio 的 DioExceptionType 枚举逐一映射为用户可读的文案：
+  /// 把 Dio 的 DioExceptionType 枚举逐一映射为稳定失败分类：
   /// - connectionTimeout / sendTimeout / receiveTimeout → 超时
-  /// - badResponse → 服务器返回错误（5xx）或业务错误（4xx）
+  /// - badResponse → HTTP 错误；401/403 会进一步映射为认证/权限分类
   /// - cancel → 请求被取消
   /// - connectionError → 网络连接异常
   /// - badCertificate → 证书校验失败
@@ -69,7 +73,8 @@ class ApiException implements Exception {
       case DioExceptionType.receiveTimeout:
         return const ApiException(
           code: timeoutError,
-          message: NetworkErrorMessages.requestTimeout,
+          message: 'Request timed out',
+          kind: FailureKind.timeout,
         );
 
       // ---- 服务器返回错误 ----
@@ -79,6 +84,11 @@ class ApiException implements Exception {
           code: error.response?.statusCode ?? serverError,
           // 优先使用后端返回的错误 message，没有则用默认文案
           message: _messageFromResponse(error.response),
+          kind: (error.response?.statusCode ?? 0) == 401
+              ? FailureKind.authentication
+              : (error.response?.statusCode ?? 0) == 403
+              ? FailureKind.permission
+              : FailureKind.server,
         );
 
       // ---- 请求被取消 ----
@@ -86,7 +96,8 @@ class ApiException implements Exception {
       case DioExceptionType.cancel:
         return const ApiException(
           code: cancelledError,
-          message: NetworkErrorMessages.requestCanceled,
+          message: 'Request cancelled',
+          kind: FailureKind.cancellation,
         );
 
       // ---- 网络连接异常 ----
@@ -94,7 +105,8 @@ class ApiException implements Exception {
       case DioExceptionType.connectionError:
         return const ApiException(
           code: networkError,
-          message: NetworkErrorMessages.networkError,
+          message: 'Network connection failed',
+          kind: FailureKind.network,
         );
 
       // ---- 证书校验失败 ----
@@ -102,7 +114,8 @@ class ApiException implements Exception {
       case DioExceptionType.badCertificate:
         return const ApiException(
           code: networkError,
-          message: NetworkErrorMessages.certificateError,
+          message: 'Certificate validation failed',
+          kind: FailureKind.network,
         );
 
       // ---- 未知错误 ----
@@ -110,15 +123,26 @@ class ApiException implements Exception {
       case DioExceptionType.unknown:
         return const ApiException(
           code: unknownError,
-          message: NetworkErrorMessages.unknownError,
+          message: 'Unknown network error',
+          kind: FailureKind.unknown,
+        );
+
+      // Dio 后续版本可能新增异常类型。底座不能因为依赖包增加枚举值就无法编译，
+      // 未识别类型统一映射为 unknown；网络日志只记录脱敏后的错误类型与状态码。
+      // ignore: unreachable_switch_default
+      default:
+        return const ApiException(
+          code: unknownError,
+          message: 'Unknown network error',
+          kind: FailureKind.unknown,
         );
     }
   }
 
   /// 从 Dio Response 中提取错误提示文案。
   ///
-  /// 优先使用后端返回的 message 字段，这样业务错误信息能直接展示给用户。
-  /// 如果后端没有返回 message，使用默认的"服务器异常"提示。
+  /// 尝试提取后端 message 作为诊断信息；HTTP 错误仍由展示层按 FailureKind
+  /// 使用本地化通用文案；BusinessException 也只有明确标记安全时才展示原文。
   static String _messageFromResponse(Response<dynamic>? response) {
     final data = response?.data;
     // 检查后端返回的 JSON 中是否包含 message 字段
@@ -126,7 +150,7 @@ class ApiException implements Exception {
       return data['message'] as String;
     }
     // 后端没有提供 message，使用默认文案
-    return NetworkErrorMessages.serverError;
+    return 'Server returned an error response';
   }
 
   @override
@@ -141,14 +165,20 @@ class ApiException implements Exception {
 ///
 /// 这类异常有两个 message：
 /// - message（继承自 ApiException）：与 userMessage 相同
-/// - userMessage：后端返回的、可直接展示给用户的文案
+/// - userMessage：业务错误原文，是否可展示还要看 canDisplayMessage
 ///
-/// AsyncRequestHandler 会优先读取 userMessage，交给 ViewModel 写入展示状态。
+/// AsyncRequestHandler 只在 canDisplayMessage=true 时使用原文，否则返回通用文案。
 class BusinessException extends ApiException {
-  BusinessException({required super.code, required this.userMessage})
-    : super(message: userMessage);
+  BusinessException({
+    required super.code,
+    required this.userMessage,
+    this.canDisplayMessage = true,
+  }) : super(message: userMessage, kind: FailureKind.business);
 
-  /// 后端返回的用户可见错误文案。
-  /// 例如："账号已被冻结，请联系客服"、"余额不足"、"权限不足"等。
+  /// 业务错误原文。手工创建的领域错误可传已审核文案；网络适配器默认把
+  /// canDisplayMessage 设为 false，防止网关或服务端内部信息直接进入 UI。
   final String userMessage;
+
+  /// 只有协议适配器明确确认脱敏后，网络响应文案才允许直接展示。
+  final bool canDisplayMessage;
 }

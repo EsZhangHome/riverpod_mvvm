@@ -27,7 +27,8 @@
 //       ),
 //       isEmpty: (data) => data.isEmpty,
 //     );
-//     if (banners != null) {
+//     // await 期间 Provider 可能已销毁，回写 State 前仍需检查 ref.mounted。
+//     if (ref.mounted && banners != null) {
 //       state = state.copyWith(banners: banners);
 //     }
 //   }
@@ -37,12 +38,15 @@
 import 'package:dio/dio.dart';
 
 import '../../core/network/api_exception.dart';
+import '../../core/errors/app_failure.dart';
+import '../../core/utils/crash_reporter.dart';
+import '../errors/failure_message_resolver.dart';
 
 /// 异步请求处理器，封装了 ViewModel 常用的请求管理逻辑。
 ///
 /// 提供的能力：
-/// 1. 请求防抖：同一时间只允许一个请求（_isRequesting）
-/// 2. CancelToken 管理：dispose 时自动取消所有请求
+/// 1. 请求互斥：同一时间只允许一个请求（_isRequesting），重复调用直接忽略
+/// 2. CancelToken 管理：dispose 时取消当前 Handler 发出的请求
 /// 3. 状态切换回调：通过 onLoading/onSuccess/onEmpty/onError 委托给 Notifier
 ///
 /// 每个 ViewModel Notifier 在 build() 中创建一个实例，
@@ -50,7 +54,7 @@ import '../../core/network/api_exception.dart';
 class AsyncRequestHandler {
   // ==================== 私有状态 ====================
 
-  /// 是否正在执行请求（防抖标记）。
+  /// 是否正在执行请求（互斥标记）。
   bool _isRequesting = false;
   bool _isDisposed = false;
 
@@ -59,12 +63,12 @@ class AsyncRequestHandler {
   /// 取消令牌，生命周期与 Notifier 绑定。
   ///
   /// 使用方式：Repository 调用 Dio 时透传此 token。
-  /// dispose 时自动 cancel，Dio 会抛出 CancelException。
+  /// dispose 时自动 cancel，Dio 会以 cancel 类型的 DioException 结束请求。
   final CancelToken cancelToken = CancelToken();
 
   // ==================== 核心方法 ====================
 
-  /// 统一包装异步请求，自动处理防抖、状态切换、异常转换。
+  /// 统一包装异步请求，自动处理请求互斥、状态切换、异常转换。
   ///
   /// [request]：真正的异步请求闭包（通常是调用 Repository 的方法）
   ///
@@ -75,7 +79,7 @@ class AsyncRequestHandler {
   ///
   /// [isEmpty]：判断数据是否为空的回调，如 (data) => data.isEmpty
   ///
-  /// 返回值：成功时返回数据，失败/防抖/取消时返回 null
+  /// 返回值：成功时返回数据，失败/重复调用/取消时返回 null
   Future<T?> execute<T>({
     required Future<T> Function() request,
     required void Function() onLoading,
@@ -84,7 +88,7 @@ class AsyncRequestHandler {
     void Function()? onEmpty,
     bool Function(T data)? isEmpty,
   }) async {
-    // ---- 步骤 1：请求防抖检查 ----
+    // ---- 步骤 1：请求互斥检查 ----
     if (_isRequesting || _isDisposed) {
       return null;
     }
@@ -114,23 +118,22 @@ class AsyncRequestHandler {
         onSuccess();
       }
       return data;
-    } catch (error) {
+    } catch (error, stackTrace) {
       // ---- 步骤 6：错误处理 ----
       if (_isDisposed ||
           cancelToken.isCancelled ||
           (error is ApiException && error.isCancelled)) {
         return null;
       }
-      if (error is BusinessException) {
-        onError(error.userMessage);
-      } else if (error is ApiException) {
-        onError(error.message);
-      } else {
-        onError('请求失败，请稍后重试');
+      // AppFailure 是已经归类的可预期失败；其他异常更可能是解析错误或编程缺陷，
+      // 页面仍显示安全文案，但必须进入监控，不能被通用 Handler 静默吞掉。
+      if (error is! AppFailure) {
+        CrashReporter.report(error, stackTrace);
       }
+      onError(FailureMessageResolver.resolve(error));
       return null;
     } finally {
-      // ---- 步骤 7：释放防抖标记 ----
+      // ---- 步骤 7：释放互斥标记 ----
       _isRequesting = false;
     }
   }

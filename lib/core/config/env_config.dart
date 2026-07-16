@@ -3,9 +3,10 @@
 // 作用：统一管理 App 的环境配置，支持通过 --dart-define 在编译时切换环境。
 //
 // 设计要点：
-// 1. 所有配置值都是 static const，编译时常量，零运行时开销
+// 1. dart-define 原始值使用 static const 固化进构建产物；current getter 再把它们
+//    组合成便于校验和测试的 EnvironmentConfig
 // 2. 使用 String.fromEnvironment / int.fromEnvironment / bool.fromEnvironment 读取编译参数
-// 3. 每个配置项都有 defaultValue，默认值指向生产环境
+// 3. 每个配置项都有开发安全默认值；生产构建必须显式提供并通过校验
 // 4. 通过 --dart-define 可以在不修改代码的情况下切换开发/测试/生产环境
 //
 // 使用方式：
@@ -16,8 +17,8 @@
 // # 测试环境
 // flutter run --dart-define=ENV_API_BASE_URL=https://test-api.example.com
 //
-// # 生产环境（使用默认值）
-// flutter run
+// # 生产构建（先从 production.example.json 复制并替换真实地址）
+// flutter build apk --release --dart-define-from-file=config/local.json
 // ```
 //
 // 扩展方式：
@@ -26,12 +27,26 @@
 
 import 'package:flutter/foundation.dart';
 
+import 'app_environment.dart';
+
 /// 环境配置统一入口。
 ///
 /// 所有与环境相关的配置都集中在这里，不在代码中硬编码。
 /// 启动 App 时可以通过 --dart-define 覆盖默认值。
 class EnvConfig {
   const EnvConfig._();
+
+  // ==================== 应用环境 ====================
+
+  static const String environmentName = String.fromEnvironment(
+    'ENV_NAME',
+    defaultValue: 'development',
+  );
+
+  static const String appName = String.fromEnvironment(
+    'ENV_APP_NAME',
+    defaultValue: 'Riverpod MVVM',
+  );
 
   // ==================== 网络配置 ====================
 
@@ -152,7 +167,7 @@ class EnvConfig {
   /// 是否启用 Mock 数据模式。
   ///
   /// - true：Repository 返回模拟数据，不发起真实网络请求（开发/演示阶段使用）
-  /// - false（默认）：Repository 调用真实后端接口
+  /// - false：Repository 调用真实后端接口
   ///
   /// 通过 --dart-define 切换：
   /// ```bash
@@ -160,7 +175,7 @@ class EnvConfig {
   /// ```
   static const bool enableMock = bool.fromEnvironment(
     'ENV_ENABLE_MOCK',
-    defaultValue: true, // 当前项目处于演示阶段，默认使用 Mock 数据
+    defaultValue: true, // 教学仓库默认可离线运行；正式配置会强制关闭
   );
 
   // ==================== 调试配置 ====================
@@ -173,4 +188,26 @@ class EnvConfig {
     'ENV_IS_DEBUG',
     defaultValue: kDebugMode,
   );
+
+  static AppEnvironment get environment =>
+      AppEnvironment.parse(environmentName);
+
+  static EnvironmentConfig get current => EnvironmentConfig(
+    environment: environment,
+    appName: appName,
+    apiBaseUrl: apiBaseUrl,
+    enableMock: enableMock,
+    enableDebugLogs: isDebug,
+    enableCharlesProxy: enableCharlesProxy,
+    allowBadCertificate: allowCharlesBadCertificate,
+  );
+
+  /// 启动时执行安全校验；正式包配置不安全时直接阻断启动。
+  static void ensureValid({bool releaseMode = kReleaseMode}) {
+    final issues = EnvironmentValidator.validate(
+      current,
+      releaseMode: releaseMode,
+    );
+    if (issues.isNotEmpty) throw ConfigurationException(issues);
+  }
 }

@@ -10,7 +10,7 @@
 // 状态流转说明：
 // idle → loading → success / empty / error
 // 任何状态都可以回到 idle 重置
-// loading 状态下一般不会再次触发 loading（由 AsyncRequestHandler 防抖保证）
+// 使用 AsyncRequestHandler 的页面在请求未结束时会忽略重复调用，避免重复进入 loading
 //
 // 使用示例（Riverpod Notifier 模式）：
 // ```dart

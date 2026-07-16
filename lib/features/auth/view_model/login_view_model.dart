@@ -19,6 +19,10 @@ import '../model/user_model.dart';
 
 // ==================== 状态类 ====================
 
+/// 登录页面需要的不可变状态。
+///
+/// 表单文本仍由 TextEditingController 管理；这里仅保存跨异步请求发生变化、
+/// 且会影响页面绘制的数据。这样每类状态只有一个明确的所有者。
 class LoginState {
   const LoginState({
     this.viewState = ViewState.idle,
@@ -59,6 +63,10 @@ class LoginState {
 
 // ==================== Notifier ====================
 
+/// 登录页面的 ViewModel。
+///
+/// Notifier 不持有 BuildContext，也不做路由跳转。它负责校验输入、调用 Repository、
+/// 把结果转成 LoginState；View 在成功后把会话交给全局 AuthNotifier。
 class LoginNotifier extends Notifier<LoginState> {
   // Handler 与当前 Provider 实例同生命周期，集中持有 CancelToken。
   late final _handler = AsyncRequestHandler();
@@ -103,11 +111,24 @@ class LoginNotifier extends Notifier<LoginState> {
     state = state.copyWith(token: response.token, user: response.user);
     return true;
   }
+
+  /// 登录接口已经成功，但会话无法安全保存时回到错误状态。
+  void showSessionStorageError() {
+    state = state.copyWith(
+      viewState: ViewState.error,
+      errorMessage: AppStrings.storageError,
+      clearToken: true,
+      clearUser: true,
+    );
+  }
 }
 
 // ==================== Provider ====================
 
-// 登录表单离开后无需保留，autoDispose 同时保证未完成请求被取消。
+/// 登录页状态 Provider。
+///
+/// `autoDispose` 表示最后一个监听者离开后销毁 LoginNotifier。build 中注册的
+/// `ref.onDispose` 会继续释放 Handler，从而取消页面已不再需要的网络请求。
 final loginProvider = NotifierProvider.autoDispose<LoginNotifier, LoginState>(
   LoginNotifier.new,
 );

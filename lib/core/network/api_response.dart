@@ -1,19 +1,18 @@
 // lib/core/network/api_response.dart
 //
-// 作用：定义后端统一响应结构，封装 code/message/data 三个字段。
+// 作用：定义 ResponseAdapter 交给 Repository 的统一响应结果。
 //
 // 设计要点：
 // 1. 泛型 T 表示 data 的实际类型，如 ApiResponse<UserModel>、ApiResponse<List<HomeBanner>>
-// 2. isSuccess 支持两种判断模式：HTTP 状态码模式（200-299）和业务码模式（code == 0）
-// 3. fromJson 通过 fromJsonT 回调把 data 转成具体业务类型，ApiClient 不需要知道具体 Model
-// 4. 当后端返回非标准格式时（如直接返回数组），提供兼容处理
+// 2. successOverride 保存当前 ResponseAdapter 已解释好的成功结果
+// 3. canDisplayMessage 明确控制服务端 message 是否允许进入 UI
+// 4. fromJson 只是 `{code,message,data}` 的便捷工厂；真实请求由 ResponseAdapter 解析
 //
 // 使用示例：
 // ```dart
-// // 在 ApiClient 中：
-// final response = await dio.get('/user/profile');
+// // 单独解析标准业务外壳时：
 // final apiResponse = ApiResponse<UserModel>.fromJson(
-//   response.data,
+//   json,
 //   (json) => UserModel.fromJson(json as Map<String, dynamic>),
 // );
 // // apiResponse.data 已经是 UserModel 类型
@@ -21,7 +20,7 @@
 
 import '../config/env_config.dart';
 
-/// 后端统一响应结构。
+/// 网络层统一响应结构。
 ///
 /// 假设后端返回的 JSON 格式为：
 /// ```json
@@ -32,12 +31,18 @@ import '../config/env_config.dart';
 /// }
 /// ```
 ///
-/// 如果实际后端字段名不同（如 code 叫 status, data 叫 result），只需要修改此类即可。
+/// 如果实际后端字段名不同（如 code 叫 status、data 叫 result），应替换
+/// ResponseAdapter，而不是让每个 Repository 自己解释协议。
 class ApiResponse<T> {
-  ApiResponse({required this.code, required this.message, this.data});
+  ApiResponse({
+    required this.code,
+    required this.message,
+    this.data,
+    this.successOverride,
+    this.canDisplayMessage = false,
+  });
 
-  /// 业务状态码。
-  /// 默认 0 表示成功（可通过 EnvConfig.apiSuccessCode 配置）。
+  /// 业务状态码或 HTTP 状态码，具体含义由 ResponseAdapter 决定。
   final int code;
 
   /// 业务提示消息。
@@ -47,10 +52,15 @@ class ApiResponse<T> {
   /// 响应数据，类型由泛型 T 决定。
   /// 成功时包含业务数据，失败时可能为 null。
   final T? data;
+  final bool? successOverride;
+
+  /// true 表示后端协议明确保证 message 已脱敏，可直接展示给用户。
+  final bool canDisplayMessage;
 
   /// 判断本次请求是否成功。
   ///
-  /// 支持两种判断模式，通过 EnvConfig.useHttpStatus 切换：
+  /// ResponseAdapter 提供 successOverride 时直接使用适配结果；没有 override 的
+  /// 手工构造对象才通过 EnvConfig.useHttpStatus 使用以下兜底规则：
   ///
   /// 模式 1（useHttpStatus = true）：使用 HTTP 状态码判断
   /// - 200-299 表示成功
@@ -60,6 +70,7 @@ class ApiResponse<T> {
   /// - code == EnvConfig.apiSuccessCode（默认 0）表示成功
   /// - 适合国内常见业务码风格的后端
   bool get isSuccess {
+    if (successOverride != null) return successOverride!;
     if (EnvConfig.useHttpStatus) {
       // HTTP 状态码模式：200-299 都是成功
       return code >= 200 && code < 300;

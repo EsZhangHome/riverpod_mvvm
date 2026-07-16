@@ -24,6 +24,8 @@ class AppNetworkImage extends StatelessWidget {
     this.height,
     this.fit = BoxFit.cover,
     this.borderRadius,
+    this.memCacheWidth,
+    this.memCacheHeight,
     this.placeholder,
     this.errorWidget,
   });
@@ -46,6 +48,10 @@ class AppNetworkImage extends StatelessWidget {
   ///
   /// 不传时不裁剪圆角。
   final BorderRadius? borderRadius;
+
+  /// 内存中的目标解码尺寸。为空时会根据 Widget 尺寸和设备像素比自动计算。
+  final int? memCacheWidth;
+  final int? memCacheHeight;
 
   /// 自定义加载中占位。
   final Widget? placeholder;
@@ -75,6 +81,10 @@ class AppNetworkImage extends StatelessWidget {
       width: width,
       height: height,
       fit: fit,
+      // 缩略图不应按服务端原始 4K 尺寸解码。磁盘仍缓存原文件，内存只保存当前
+      // 控件实际需要的像素尺寸，长列表滚动时可显著降低峰值内存。
+      memCacheWidth: memCacheWidth ?? _physicalPixels(context, width),
+      memCacheHeight: memCacheHeight ?? _physicalPixels(context, height),
       placeholder: (context, url) {
         return placeholder ?? _buildPlaceholder(context);
       },
@@ -82,6 +92,15 @@ class AppNetworkImage extends StatelessWidget {
         return errorWidget ?? _buildErrorView(context);
       },
     );
+  }
+
+  int? _physicalPixels(BuildContext context, double? logicalPixels) {
+    if (logicalPixels == null ||
+        !logicalPixels.isFinite ||
+        logicalPixels <= 0) {
+      return null;
+    }
+    return (logicalPixels * MediaQuery.devicePixelRatioOf(context)).ceil();
   }
 
   Widget _buildPlaceholder(BuildContext context) {

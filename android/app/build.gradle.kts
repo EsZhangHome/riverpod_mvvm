@@ -1,6 +1,15 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    FileInputStream(keystorePropertiesFile).use(keystoreProperties::load)
 }
 
 android {
@@ -21,9 +30,23 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            // CI 可构建未签名产物；正式发布时复制 key.properties.example 并填写密钥。
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }

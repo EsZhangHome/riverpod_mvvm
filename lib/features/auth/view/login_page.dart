@@ -6,20 +6,25 @@
 // 1. watch loginProvider 渲染表单状态；
 // 2. 点击登录时 read Notifier 并发送账号密码；
 // 3. 成功后读取 LoginState，把 token/user 写入 App 级 authProvider；
-// 4. AuthProvider 持久化完成后跳转商品首页；失败则留在原页显示错误。
+// 4. AuthNotifier 持久化并更新登录态；GoRouter 守卫自动进入当前业务首页。
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../../core/config/env_config.dart';
 import '../../../shared/state/view_state.dart';
 import '../../../shared/localization/app_strings.dart';
-import '../../../shared/navigation/route_paths.dart';
 import '../../../shared/theme/app_spacing.dart';
 import '../../../shared/ui/state_view.dart';
 import '../view_model/auth_view_model.dart';
 import '../view_model/login_view_model.dart';
 
+/// 登录模块的 View，只负责收集输入、展示 [LoginState] 和发送用户操作。
+///
+/// 页面不直接调用 Dio，也不保存全局登录态：
+/// - 临时的登录请求状态由 autoDispose 的 loginProvider 管理；
+/// - 成功后的长期会话由 App 级 authProvider 管理；
+/// - 页面离开时 LoginNotifier 会释放请求处理器并取消未完成请求。
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
@@ -29,8 +34,8 @@ class LoginPage extends ConsumerStatefulWidget {
 
 class _LoginPageState extends ConsumerState<LoginPage> {
   // TextEditingController 是纯 UI 状态，归 StatefulWidget 管理，不放入 Provider。
-  final _accountController = TextEditingController(text: 'user@example.com');
-  final _passwordController = TextEditingController(text: '123456');
+  final _accountController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   @override
   void dispose() {
@@ -59,7 +64,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             children: [
               const SizedBox(height: AppSpacing.xxxl),
               Text(
-                AppStrings.appName,
+                EnvConfig.appName,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
@@ -113,12 +118,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final user = loginState.user;
     if (token == null || user == null) return;
 
-    // 步骤 4：交给 App 级 AuthNotifier，同时更新内存状态与本地安全存储。
-    await ref.read(authProvider.notifier).loginSuccess(token, user);
-
-    // 步骤 5：持久化完成且页面仍存在时，使用 go 替换登录路由。
-    if (mounted) {
-      context.go(RoutePaths.mainHome);
+    // 步骤 4：交给 App 级 AuthNotifier；先安全保存完整会话，成功后再更新内存状态。
+    final persisted = await ref
+        .read(authProvider.notifier)
+        .loginSuccess(token, user);
+    if (!mounted) return;
+    if (!persisted) {
+      ref.read(loginProvider.notifier).showSessionStorageError();
     }
+
+    // 这里故意不写 `context.go('/main/home')`：登录页属于通用 auth 模块，
+    // 不应该知道任何项目的具体首页。AuthState 更新后，MyApp 的
+    // ref.listen 会通知 GoRouter 重新执行守卫，再由入口路由包决定首页。
   }
 }

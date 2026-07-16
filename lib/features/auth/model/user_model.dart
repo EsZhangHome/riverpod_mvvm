@@ -45,7 +45,10 @@ class UserModel {
 
   /// 从 JSON Map 创建 UserModel 实例。
   ///
-  /// 使用 json_helper 做安全类型转换，避免后端字段类型异常导致崩溃。
+  /// 字段映射代码由 json_serializable 生成。
+  /// 缺失或为 null 的必填字符串会使用 `@JsonKey` 中的默认值；如果后端返回了
+  /// 错误的数据类型，生成代码会抛出解析异常，再由网络层转换成统一的协议错误。
+  /// 这里不悄悄吞掉类型错误，是为了尽早发现服务端协议与客户端模型不一致。
   ///
   /// 示例：
   /// ```dart
@@ -86,7 +89,7 @@ class UserModel {
 
   /// 序列化为 JSON Map。
   ///
-  /// 当前用于 AuthProvider 把用户信息保存到 SharedPreferences。
+  /// 当前由 SessionStore 与 token 一起序列化为完整安全会话。
   Map<String, dynamic> toJson() => _$UserModelToJson(this);
 
   /// 相等性比较：所有字段相等才认为两个 UserModel 相等。

@@ -2,8 +2,8 @@
 //
 // 作用：DatabaseService 的 sqflite 实现。
 //
-// 只有这个文件直接依赖 sqflite。
-// Repository、ViewModel、View 都不应该 import sqflite。
+// sqflite 类型只允许出现在 core/database 及基础设施 Provider 组装处。
+// 业务 Repository、ViewModel、View 都不应该 import sqflite。
 
 import 'package:sqflite/sqflite.dart' hide DatabaseException;
 

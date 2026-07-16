@@ -1,6 +1,6 @@
 // test/core/network/unauthorized_guard_test.dart
 //
-// 401 防抖测试：并发接口同时返回未授权时只执行一次退出；新登录会话通过 reset
+// 401 会话失效去重测试：并发接口同时未授权时只执行一次退出；新会话通过 reset
 // 重新开放守卫。这里测试并发控制，不启动 Dio 拦截器链。
 
 import 'package:flutter_test/flutter_test.dart';

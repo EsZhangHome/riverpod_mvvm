@@ -1,164 +1,136 @@
 // lib/features/auth/view_model/auth_view_model.dart
 //
-// 作用：全局登录状态管理器，统一管理 token、当前用户、登录/退出/恢复会话。
-//
-// 数据流保持不变：
-// 登录：LoginPage → authNotifier.loginSuccess(token, user) → state 更新
-// 退出：MinePage → authNotifier.logout() → state 更新
-// 恢复：build() 中自动调用 restoreSession()
-// 401：ApiClient 回调 → authNotifier.logout()
-
-import 'dart:convert';
+// App 级认证 ViewModel。它管理“恢复中、未登录、已登录”三种稳定状态，负责把
+// 完整 AuthSession 交给 SessionStore，不直接操作 Keychain 或 SharedPreferences。
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/providers/service_providers.dart';
-import '../../../core/storage/local_storage.dart';
-import '../../../core/storage/token_storage.dart';
+import '../../../core/utils/crash_reporter.dart';
+import '../auth_providers.dart';
+import '../model/auth_session.dart';
 import '../model/user_model.dart';
 
-// ==================== 状态类 ====================
+/// 认证状态机。显式枚举比多个 bool 更难组合出矛盾状态。
+enum AuthStatus { restoring, unauthenticated, authenticated }
 
-/// 全局登录状态（不可变）。
+/// 全局认证状态（不可变）。
 class AuthState {
-  const AuthState({
-    this.token,
-    this.currentUser,
-    this.isRestoringSession = false,
-  });
+  const AuthState.restoring() : status = AuthStatus.restoring, session = null;
 
-  /// 当前 token，null 表示未登录
-  final String? token;
+  const AuthState.unauthenticated()
+    : status = AuthStatus.unauthenticated,
+      session = null;
 
-  /// 当前登录用户信息
-  final UserModel? currentUser;
+  const AuthState.authenticated(AuthSession this.session)
+    : status = AuthStatus.authenticated;
 
-  /// 是否正在从本地存储恢复登录态
-  final bool isRestoringSession;
+  final AuthStatus status;
+  final AuthSession? session;
 
-  /// 是否已登录
-  bool get isLoggedIn => token != null && token!.isNotEmpty;
-
-  AuthState copyWith({
-    String? token,
-    UserModel? currentUser,
-    bool? isRestoringSession,
-    bool clearToken = false,
-    bool clearUser = false,
-  }) {
-    return AuthState(
-      token: clearToken ? null : token ?? this.token,
-      currentUser: clearUser ? null : currentUser ?? this.currentUser,
-      isRestoringSession: isRestoringSession ?? this.isRestoringSession,
-    );
-  }
+  String? get token => session?.token;
+  UserModel? get currentUser => session?.user;
+  bool get isRestoringSession => status == AuthStatus.restoring;
+  bool get isLoggedIn => status == AuthStatus.authenticated && session != null;
 }
 
-// ==================== Notifier ====================
-
-/// 全局登录状态 Notifier。
+/// App 级认证 ViewModel。
 ///
-/// 作为 NotifierProvider 在 App 顶层通过 ProviderScope 提供。
-/// 所有页面通过 ref.watch(authProvider) 监听登录状态变化。
+/// 状态更新规则：
+/// - 恢复：安全存储完整解析成功才进入 authenticated；
+/// - 登录：完整会话写入成功才更新内存状态；
+/// - 刷新：新 token 持久化成功后才让请求重放；
+/// - 退出：立即清内存，再尽力清安全存储并上报失败。
 class AuthNotifier extends Notifier<AuthState> {
-  // ==================== 常量 ====================
-
-  static const String _userKey = 'current_user';
-
-  // ==================== 构建 ====================
-
   @override
   AuthState build() {
-    final apiClient = ref.read(apiClientProvider);
-    // 注入网络层回调：tokenProvider 和 unauthorisedCallback
-    // 闭包捕获 this，每次调用时返回最新的 state.token
-    apiClient.setTokenProvider(() => state.token);
-    apiClient.setUnauthorizedCallback(logout);
-
-    // 启动时从本地恢复登录态
-    // 使用 Future.microtask 延迟执行：build() 期间 state 尚未完全初始化
-    // 初始状态设为 isRestoringSession = true，路由守卫会在此期间停留在启动页
     Future.microtask(_restoreSession);
-    return const AuthState(isRestoringSession: true);
+    return const AuthState.restoring();
   }
 
-  // ==================== 会话恢复 ====================
+  /// 刷新并原子保存新会话，供 App 组合层的网络绑定调用。
+  ///
+  /// ViewModel 只依赖 SessionRefresher 和 SessionStore 两个认证领域端口，不知道
+  /// Dio、拦截器或请求重放细节。保存失败时返回 null，网络层会按刷新失败处理。
+  Future<String?> refreshAccessToken() async {
+    final current = state.session;
+    if (current == null) return null;
+    final token = await ref.read(sessionRefresherProvider).refreshAccessToken();
+    if (token == null || token.isEmpty || !ref.mounted) return null;
+
+    final refreshed = AuthSession(token: token, user: current.user);
+    try {
+      await ref.read(sessionStoreProvider).write(refreshed);
+    } catch (error, stack) {
+      CrashReporter.report(error, stack);
+      return null;
+    }
+    if (!ref.mounted) return null;
+    state = AuthState.authenticated(refreshed);
+    return token;
+  }
 
   Future<void> _restoreSession() async {
-    if (state.isLoggedIn) return;
-
-    state = state.copyWith(isRestoringSession: true);
-
+    final store = ref.read(sessionStoreProvider);
     try {
-      final token = await TokenStorage.getToken();
-      final userJson = LocalStorage.getString(_userKey);
-      UserModel? user;
-      if (userJson != null && userJson.isNotEmpty) {
-        user = UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
+      final session = await store.read();
+      if (!ref.mounted) return;
+      if (session == null) {
+        state = const AuthState.unauthenticated();
+        return;
       }
-      state = state.copyWith(
-        token: token,
-        currentUser: user,
-        isRestoringSession: false,
-      );
-    } catch (_) {
-      state = state.copyWith(isRestoringSession: false);
+      state = AuthState.authenticated(session);
+      CrashReporter.setContext('userId', session.user.id);
+    } catch (error, stack) {
+      // 损坏或旧版本会话不能继续使用。先尝试清除，避免每次启动重复解析失败。
+      CrashReporter.report(error, stack);
+      try {
+        await store.clear();
+      } catch (clearError, clearStack) {
+        CrashReporter.report(clearError, clearStack);
+      }
+      if (ref.mounted) state = const AuthState.unauthenticated();
     }
   }
 
-  // ==================== 登录 ====================
+  /// 保存完整会话。返回 false 表示安全存储失败，调用方应留在登录页。
+  Future<bool> loginSuccess(String token, UserModel user) async {
+    final session = AuthSession(token: token, user: user);
+    try {
+      await ref.read(sessionStoreProvider).write(session);
+    } catch (error, stack) {
+      CrashReporter.report(error, stack);
+      return false;
+    }
+    if (!ref.mounted) return false;
 
-  /// 登录成功后保存 token 和用户信息。
-  ///
-  /// 调用时机：LoginPage 在登录成功后调用。
-  Future<void> loginSuccess(String token, UserModel user) async {
-    // 更新内存状态
-    state = state.copyWith(token: token, currentUser: user);
-
-    // 重置 401 守卫，允许新会话的下一次 401 触发退出
-    ref.read(apiClientProvider).resetUnauthorizedGuard();
-
-    // 写入本地存储
-    await TokenStorage.saveToken(token);
-    await LocalStorage.setString(_userKey, jsonEncode(user.toJson()));
+    state = AuthState.authenticated(session);
+    CrashReporter.setContext('userId', user.id);
+    return true;
   }
 
-  // ==================== 退出登录 ====================
-
-  /// 退出登录，清空内存和本地缓存。
-  ///
-  /// 调用时机：MinePage、ProfilePage 的退出按钮，以及 401 回调。
+  /// 清理登录态。内存立即退出，安全存储失败会记录并重试一次。
   Future<void> logout() async {
-    // 清空内存状态
-    state = state.copyWith(clearToken: true, clearUser: true);
-
-    // 清除本地存储
-    await TokenStorage.clearToken();
-    await LocalStorage.remove(_userKey);
+    state = const AuthState.unauthenticated();
+    CrashReporter.setContext('userId', null);
+    final store = ref.read(sessionStoreProvider);
+    try {
+      await store.clear();
+    } catch (error, stack) {
+      CrashReporter.report(error, stack);
+      try {
+        await store.clear();
+      } catch (retryError, retryStack) {
+        CrashReporter.report(retryError, retryStack);
+      }
+    }
   }
 }
 
-// ==================== Provider ====================
-
-/// 全局登录状态 Provider。
-///
-/// 使用方式：
-/// ```dart
-/// // 监听登录状态
-/// final authState = ref.watch(authProvider);
-///
-/// // 执行登录/退出操作
-/// ref.read(authProvider.notifier).loginSuccess(token, user);
-/// ref.read(authProvider.notifier).logout();
-/// ```
 final authProvider = NotifierProvider<AuthNotifier, AuthState>(
   AuthNotifier.new,
 );
 
-/// 当前登录用户 id 的最小派生状态。
-///
-/// 用户级缓存只依赖这个 Provider：同一用户刷新 token 不会清缓存，退出或切换账号
-/// 时 id 变化会让依赖它的购物车、收藏、订单 Repository 自动重建。
+/// 用户级缓存只依赖用户 id；刷新 token 不会让购物车、收藏等状态重建。
 final currentUserIdProvider = Provider<String?>((ref) {
   return ref.watch(authProvider.select((state) => state.currentUser?.id));
 });

@@ -1,0 +1,9 @@
+{
+  "ENV_NAME": "development",
+  "ENV_APP_NAME": "Riverpod MVVM Dev",
+  "ENV_API_BASE_URL": "https://dev-api.example.com",
+  "ENV_ENABLE_MOCK": true,
+  "ENV_IS_DEBUG": true,
+  "ENV_ENABLE_CHARLES_PROXY": false,
+  "ENV_ALLOW_CHARLES_BAD_CERTIFICATE": false
+}
