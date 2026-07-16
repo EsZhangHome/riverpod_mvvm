@@ -51,6 +51,9 @@ dependencies:
   connectivity_plus: ^7.1.1
   permission_handler: ^12.0.3
   package_info_plus: ^10.1.0
+  # 打开经过环境校验的 HTTPS 隐私政策地址。相比在底座中内置 WebView，它不会把
+  # 浏览器内核、Cookie 和网页生命周期带进 App，也方便客户替换自己的政策站点。
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

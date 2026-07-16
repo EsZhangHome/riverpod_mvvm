@@ -45,6 +45,11 @@ class EnvironmentConfig {
     required this.environment,
     required this.appName,
     required this.apiBaseUrl,
+    required this.privacyPolicyVersion,
+    required this.privacyPolicyDocumentVersion,
+    required this.privacyPolicyUrl,
+    required this.userAgreementDocumentVersion,
+    required this.userAgreementUrl,
     required this.enableMock,
     required this.enableDebugLogs,
     required this.enableCharlesProxy,
@@ -60,6 +65,21 @@ class EnvironmentConfig {
   /// 所有 API 请求共用的绝对基础地址，例如 `https://api.example.cn`。
   /// 必须包含 scheme 和 host；末尾是否带 `/` 需与接口 path 约定保持一致。
   final String apiBaseUrl;
+
+  /// 用户本次需要同意的隐私政策业务版本；版本变化会触发重新确认。
+  final String privacyPolicyVersion;
+
+  /// 当前公开政策正文版本；普通文字修订只更新它，不强制用户重复确认。
+  final String privacyPolicyDocumentVersion;
+
+  /// 完整隐私政策的公开绝对地址；正式环境必须使用 HTTPS 且不能是模板域名。
+  final String privacyPolicyUrl;
+
+  /// 当前公开用户协议正文版本，用于同意记录追溯。
+  final String userAgreementDocumentVersion;
+
+  /// 完整用户协议的公开绝对地址；正式环境必须使用 HTTPS 且不能是模板域名。
+  final String userAgreementUrl;
 
   /// 是否允许 Repository 选择本地 Mock 数据；正式或 release 包必须关闭。
   final bool enableMock;
@@ -118,10 +138,31 @@ abstract final class EnvironmentValidator {
     // 防止有人用 development 环境名构建 release 来绕开生产限制。
     final strict = releaseMode || config.isProduction;
     final uri = Uri.tryParse(config.apiBaseUrl);
+    final privacyUri = Uri.tryParse(config.privacyPolicyUrl);
+    final userAgreementUri = Uri.tryParse(config.userAgreementUrl);
 
     if (config.appName.trim().isEmpty) issues.add('ENV_APP_NAME 不能为空');
     if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
       issues.add('ENV_API_BASE_URL 不是有效的绝对地址');
+    }
+    if (config.privacyPolicyVersion.trim().isEmpty) {
+      issues.add('ENV_PRIVACY_POLICY_VERSION 不能为空');
+    }
+    if (config.privacyPolicyDocumentVersion.trim().isEmpty) {
+      issues.add('ENV_PRIVACY_POLICY_DOCUMENT_VERSION 不能为空');
+    }
+    if (privacyUri == null ||
+        !privacyUri.hasScheme ||
+        privacyUri.host.isEmpty) {
+      issues.add('ENV_PRIVACY_POLICY_URL 不是有效的绝对地址');
+    }
+    if (config.userAgreementDocumentVersion.trim().isEmpty) {
+      issues.add('ENV_USER_AGREEMENT_DOCUMENT_VERSION 不能为空');
+    }
+    if (userAgreementUri == null ||
+        !userAgreementUri.hasScheme ||
+        userAgreementUri.host.isEmpty) {
+      issues.add('ENV_USER_AGREEMENT_URL 不是有效的绝对地址');
     }
 
     if (strict) {
@@ -133,6 +174,36 @@ abstract final class EnvironmentValidator {
       }
       if (uri?.host.endsWith('.invalid') ?? false) {
         issues.add('正式环境不能使用占位 API 地址');
+      }
+      if (privacyUri?.scheme != 'https') {
+        issues.add('正式环境隐私政策必须使用 HTTPS');
+      }
+      if (privacyUri?.host.endsWith('example.com') ?? false) {
+        issues.add('正式环境不能使用示例隐私政策地址');
+      }
+      if (privacyUri?.host.endsWith('.invalid') ?? false) {
+        issues.add('正式环境不能使用占位隐私政策地址');
+      }
+      if (userAgreementUri?.scheme != 'https') {
+        issues.add('正式环境用户协议必须使用 HTTPS');
+      }
+      if (userAgreementUri?.host.endsWith('example.com') ?? false) {
+        issues.add('正式环境不能使用示例用户协议地址');
+      }
+      if (userAgreementUri?.host.endsWith('.invalid') ?? false) {
+        issues.add('正式环境不能使用占位用户协议地址');
+      }
+      if (config.privacyPolicyVersion == 'starter-1' ||
+          config.privacyPolicyVersion.startsWith('replace-with-')) {
+        issues.add('正式环境不能使用模板隐私授权版本');
+      }
+      if (config.privacyPolicyDocumentVersion == 'starter-document-1' ||
+          config.privacyPolicyDocumentVersion.startsWith('replace-with-')) {
+        issues.add('正式环境不能使用模板隐私政策文档版本');
+      }
+      if (config.userAgreementDocumentVersion == 'starter-user-agreement-1' ||
+          config.userAgreementDocumentVersion.startsWith('replace-with-')) {
+        issues.add('正式环境不能使用模板用户协议文档版本');
       }
       if (config.enableMock) issues.add('正式环境必须关闭 Mock');
       if (config.enableDebugLogs) issues.add('正式环境必须关闭调试日志');

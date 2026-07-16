@@ -16,6 +16,7 @@ import '../../../../shared/localization/user_message.dart';
 import '../application/sign_in_use_case.dart';
 import '../../auth_composition.dart';
 import '../model/login_request.dart';
+import '../model/login_input_rules.dart';
 
 // ==================== 状态类 ====================
 
@@ -105,13 +106,17 @@ class LoginNotifier extends Notifier<LoginState> {
     // 步骤 1：同步校验在发请求前完成，减少无意义的 Repository 调用。
     // 分开判断可以让 Toast 准确告诉用户当前缺少哪一项；两项都为空时先提示账号，
     // 用户补充账号再次提交后，再提示密码，符合表单从上到下的填写顺序。
-    if (account.trim().isEmpty) {
-      _publishError(const UserMessage.localized(UserMessageKey.enterAccount));
-      return;
-    }
-    if (password.isEmpty) {
-      _publishError(const UserMessage.localized(UserMessageKey.enterPassword));
-      return;
+    switch (LoginInputRules.firstIssue(account, password)) {
+      case LoginInputIssue.accountRequired:
+        _publishError(const UserMessage.localized(UserMessageKey.enterAccount));
+        return;
+      case LoginInputIssue.passwordRequired:
+        _publishError(
+          const UserMessage.localized(UserMessageKey.enterPassword),
+        );
+        return;
+      case null:
+        break;
     }
 
     // 步骤 2：ViewModel 只创建经过表单规则处理的命令参数，然后调用 SignIn 抽象。

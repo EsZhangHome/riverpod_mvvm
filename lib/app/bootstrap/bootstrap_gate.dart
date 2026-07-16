@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/env_config.dart';
+import '../../features/privacy_consent/privacy_consent.dart';
+import '../../features/auth/auth.dart';
 import '../../l10n/app_localizations.dart';
 import '../../shared/ui/loading_view.dart';
 import '../app.dart';
@@ -83,14 +85,28 @@ class _BootstrapGateState extends State<BootstrapGate> {
           );
         }
 
-        // 关键启动任务已经结束，现在才创建业务 ProviderScope。
+        // 关键启动任务已经结束，现在才创建业务 ProviderScope。PrivacyConsentGate
+        // 位于 MyApp 外层：从未同意过政策时先清理可能残留的安全会话，再创建 MyApp
+        // 并显示登录页；它不再自动弹协议。若只同意过旧版本，则不清会话，由 MyApp
+        // 保留当前路由并用升级 Host 全局覆盖弹窗。两种状态下 Warmup 都等待当前版本同意。
         // overrideWithValue 让所有业务 Provider 共享同一份不可变启动结果；
         // 非关键预热会由 MyApp 按“首帧后/会话完成后”分级触发，不延长当前等待时间。
         return ProviderScope(
           // 启动结果由当前 Gate 写入内层 Scope，业务 Provider 可以直接读取。
           // 项目入口若有外层 ProviderScope overrides，这里会自然继承。
           overrides: [bootstrapResultProvider.overrideWithValue(result)],
-          child: MyApp(routeBundle: widget.routeBundle),
+          child: Consumer(
+            // Consumer 必须位于上面的内层 ProviderScope 之下，才能读取项目 override
+            // 后的 SessionStore，而不是意外使用底座默认实现。
+            builder: (context, ref, child) => PrivacyConsentGate(
+              // 首次隐私记录缺失时，安全存储仍可能残留旧登录会话（例如 iOS
+              // Keychain 跨卸载保留）。在创建 MyApp 前先清除，确保首次打开直接进入
+              // 登录页；之后由登录页未勾选的提交动作请求 Host 展示首次弹窗。
+              onPrepareInitialLogin: () =>
+                  ref.read(sessionStoreProvider).clear(),
+              child: MyApp(routeBundle: widget.routeBundle),
+            ),
+          ),
         );
       },
     );

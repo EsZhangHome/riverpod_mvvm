@@ -27,6 +27,9 @@ class AppRouter {
   /// - [routeBundle]：项目入口提供的业务路由、首页、登录页和保护规则。
   /// - [navigatorKey]：可选根 Navigator 身份键。MyApp 传入稳定 key，让位于
   ///   Navigator 外层的 App 级监听也能取得根 Overlay；普通单元测试可以省略。
+  /// - [defaultLoginBuilder]：App 组合层提供的默认登录页工厂。底座 MyApp 用它给
+  ///   LoginPage 注入隐私登录前置检查；项目显式设置 routeBundle.loginBuilder 时，
+  ///   项目的自定义登录页优先，并需要自行执行相同的合规前置流程。
   ///
   /// AppRouter 构造时就创建 [config]。调用方应在 StatefulWidget 生命周期内只构造
   /// 一次，并在 dispose 时释放 [config]，不能在每次 build 中重新创建。
@@ -35,11 +38,14 @@ class AppRouter {
     required List<RouteGuard> guards,
     required AppRouteBundle routeBundle,
     GlobalKey<NavigatorState>? navigatorKey,
+    Widget Function(BuildContext context, GoRouterState state)?
+    defaultLoginBuilder,
   }) : config = _createRouter(
          refreshListenable,
          guards,
          routeBundle,
          navigatorKey,
+         defaultLoginBuilder,
        );
 
   /// 已完成底座路由和业务路由组装的 GoRouter 实例。
@@ -54,6 +60,8 @@ class AppRouter {
     List<RouteGuard> guards,
     AppRouteBundle routeBundle,
     GlobalKey<NavigatorState>? navigatorKey,
+    Widget Function(BuildContext context, GoRouterState state)?
+    defaultLoginBuilder,
   ) {
     return GoRouter(
       // 不能在 build 中重新创建这个 key，否则导航栈和根 Overlay 都会丢失。
@@ -82,7 +90,9 @@ class AppRouter {
         GoRoute(
           path: routeBundle.loginPath,
           builder:
-              routeBundle.loginBuilder ?? (context, state) => const LoginPage(),
+              routeBundle.loginBuilder ??
+              defaultLoginBuilder ??
+              (context, state) => const LoginPage(),
         ),
         GoRoute(
           path: RoutePaths.sessionRestoring,

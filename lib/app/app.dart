@@ -16,6 +16,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/config/env_config.dart';
 import '../features/auth/auth.dart';
+import '../features/privacy_consent/privacy_consent.dart';
 import '../l10n/app_localizations.dart';
 import '../shared/theme/theme_provider.dart';
 import 'bootstrap/app_warmup.dart';
@@ -81,8 +82,24 @@ class _AppViewState extends ConsumerState<_AppView> {
   /// 声明 ref.listen 更明确，也确保路由器创建后立即开始接收认证状态变化。
   late final ProviderSubscription<AuthState> _authSubscription;
 
+  /// 隐私政策状态订阅。
+  ///
+  /// 首次授权时 MyApp 已经显示登录页，但登录请求尚未放行；政策升级时 MyApp 保留
+  /// 当前业务路由。两种情况都在用户同意当前版本后才放行 Warmup，避免提前初始化
+  /// 统计、推送等需要授权的 SDK。
+  late final ProviderSubscription<PrivacyConsentState> _privacySubscription;
+
   /// 防止登录、退出等后续状态变化重复安排“会话完成后”阶段。
   bool _sessionWarmupScheduled = false;
+
+  /// MyApp 是否已经绘制首帧。它与隐私状态共同决定 afterFirstFrame 能否开始。
+  bool _firstFrameRendered = false;
+
+  /// 防止隐私状态重建后重复启动首帧预热阶段。
+  bool _firstFrameWarmupScheduled = false;
+
+  /// 安全会话是否已完成恢复。只有它与隐私授权同时满足才启动会话后预热。
+  bool _sessionRestored = false;
 
   @override
   void initState() {
@@ -102,6 +119,19 @@ class _AppViewState extends ConsumerState<_AppView> {
       ],
       routeBundle: widget.routeBundle,
       navigatorKey: _navigatorKey,
+      // 默认登录页在真正发请求前请求隐私授权。App 层同时知道 Auth 与 Privacy，
+      // 适合在这里完成组合；两个 Feature 自身不互相 import，保持依赖单向。
+      defaultLoginBuilder: (context, state) => LoginPage(
+        beforeLogin: requestPrivacyConsentBeforeLogin,
+        openAgreement: (context, document) => switch (document) {
+          LoginAgreementDocument.privacyPolicy => openPrivacyPolicyDocument(
+            context,
+          ),
+          LoginAgreementDocument.userAgreement => openUserAgreementDocument(
+            context,
+          ),
+        },
+      ),
     ).config;
 
     // fireImmediately 先把 restoring 快照交给回调；它只刷新守卫，不会启动 Warmup。
@@ -112,15 +142,18 @@ class _AppViewState extends ConsumerState<_AppView> {
       fireImmediately: true,
     );
 
+    _privacySubscription = ref.listenManual<PrivacyConsentState>(
+      privacyConsentProvider,
+      _onPrivacyConsentChanged,
+      fireImmediately: true,
+    );
+
     // 监控等 early 任务只等待 MyApp 第一帧，不等待安全会话。任务通过 phase 显式
     // 选择这个时机，远程配置等默认任务不会在这里被提前执行。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(
-        ref
-            .read(appWarmupProvider.notifier)
-            .startPhase(AppWarmupPhase.afterFirstFrame),
-      );
+      _firstFrameRendered = true;
+      _scheduleWarmupWhenAllowed();
     });
   }
 
@@ -131,17 +164,60 @@ class _AppViewState extends ConsumerState<_AppView> {
   /// 等任务与 SecureStorage 读取争抢启动期资源。
   void _onAuthStateChanged(AuthState? previous, AuthState next) {
     _routerRefresh.notify();
-    if (next.isRestoringSession || _sessionWarmupScheduled) return;
-    _sessionWarmupScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      // read 只发送一次命令，不监听预热进度，因此根 Widget 不会为后台状态重建。
+    _sessionRestored = !next.isRestoringSession;
+    _scheduleWarmupWhenAllowed();
+  }
+
+  /// 隐私状态改变时重新判断延迟初始化是否可以执行。
+  ///
+  /// policyUpgradeRequired 和 upgradeDeclinedForSession 都没有同意当前版本，因此不会
+  /// 启动尚未执行的 Warmup。已经运行过的第三方 SDK 无法由底座通用反初始化，真实
+  /// SDK 若支持停止采集，应在项目自己的拒绝升级回调中额外调用其关闭方法。
+  void _onPrivacyConsentChanged(
+    PrivacyConsentState? previous,
+    PrivacyConsentState next,
+  ) {
+    // 登录页复选框只表示本次页面会话的选择，不能在政策失效后继续保持旧的 true。
+    // 因此撤回同意、发现升级或拒绝升级时立即取消；从未同意/旧版本变为当前版本
+    // 时（例如在升级弹窗中点击同意）再同步选中。fireImmediately 的 previous 为
+    // null，此时故意不把历史磁盘记录自动映射成页面已勾选。
+    final agreement = ref.read(loginAgreementSelectionProvider.notifier);
+    if (!next.hasAcceptedCurrentPolicy) {
+      agreement.unselect();
+    } else if (previous != null && !previous.hasAcceptedCurrentPolicy) {
+      agreement.setSelected(true);
+    }
+    _scheduleWarmupWhenAllowed();
+  }
+
+  /// 同时满足“界面时机”和“已同意当前政策”后才启动对应 Warmup 阶段。
+  void _scheduleWarmupWhenAllowed() {
+    if (!mounted ||
+        !ref.read(privacyConsentProvider).hasAcceptedCurrentPolicy) {
+      return;
+    }
+
+    if (_firstFrameRendered && !_firstFrameWarmupScheduled) {
+      _firstFrameWarmupScheduled = true;
       unawaited(
         ref
             .read(appWarmupProvider.notifier)
-            .startPhase(AppWarmupPhase.afterSessionReady),
+            .startPhase(AppWarmupPhase.afterFirstFrame),
       );
-    });
+    }
+
+    if (_sessionRestored && !_sessionWarmupScheduled) {
+      _sessionWarmupScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        // 再等目标页一帧，避免远程配置等后台工作与登录页/首页首次布局争抢资源。
+        unawaited(
+          ref
+              .read(appWarmupProvider.notifier)
+              .startPhase(AppWarmupPhase.afterSessionReady),
+        );
+      });
+    }
   }
 
   @override
@@ -151,7 +227,6 @@ class _AppViewState extends ConsumerState<_AppView> {
 
     // 监听主题变化，MaterialApp 会在主题切换时正确重建
     final themeState = ref.watch(themeProvider);
-
     return MaterialApp.router(
       title: EnvConfig.appName,
       debugShowCheckedModeBanner: false,
@@ -167,9 +242,15 @@ class _AppViewState extends ConsumerState<_AppView> {
       // 导航层级。系统连接状态由 Riverpod Provider 注入，测试可完全替换。这里不再
       // 根据接口耗时推断弱网，避免把服务端计算慢错误提示成用户网络差。
       builder: (context, child) {
-        return AppNetworkFeedback(
+        return PrivacyConsentHost(
           navigatorKey: _navigatorKey,
-          child: child ?? const SizedBox.shrink(),
+          // 隐私 Feature 不直接 import Auth；应用组合层在这里把“拒绝升级”连接到
+          // AuthNotifier。logout 会立即清内存状态，GoRouter 自动返回登录页。
+          onDeclineUpgrade: () => ref.read(authProvider.notifier).logout(),
+          child: AppNetworkFeedback(
+            navigatorKey: _navigatorKey,
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
 
@@ -185,9 +266,11 @@ class _AppViewState extends ConsumerState<_AppView> {
 
   @override
   void dispose() {
-    // 三个对象都由当前 State 创建，因此也必须在相同生命周期边界释放。
+    // 两个订阅、路由器和刷新通知器都由当前 State 创建，因此也必须在相同生命周期
+    // 边界释放。
     // 先停止 Provider 回调，再释放 GoRouter 和它订阅的 refreshListenable。
     _authSubscription.close();
+    _privacySubscription.close();
     _router.dispose();
     _routerRefresh.dispose();
     super.dispose();

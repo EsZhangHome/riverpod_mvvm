@@ -10,6 +10,12 @@ import 'package:riverpod_mvvm/app/app.dart';
 import 'package:riverpod_mvvm/app/starter/starter.dart';
 import 'package:riverpod_mvvm/app/starter/starter_home_page.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
+import 'package:riverpod_mvvm/features/privacy_consent/privacy_consent.dart';
+
+const _policy = PrivacyPolicyConfig(
+  version: 'starter-test-v1',
+  url: 'https://example.test/privacy',
+);
 
 final class _MemorySessionStore implements SessionStore {
   _MemorySessionStore(this.session);
@@ -24,6 +30,19 @@ final class _MemorySessionStore implements SessionStore {
 
   @override
   Future<void> clear() async => session = null;
+}
+
+final class _AcceptedPrivacyRepository implements PrivacyConsentRepository {
+  @override
+  PrivacyConsentRecord readAcceptedPolicyRecord() =>
+      PrivacyConsentRecord.fromLegacyVersion(_policy.version);
+
+  @override
+  Future<bool> saveAcceptedPolicyRecord(PrivacyConsentRecord record) async =>
+      true;
+
+  @override
+  Future<bool> clearAcceptedPolicyVersion() async => true;
 }
 
 void main() {
@@ -43,7 +62,13 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [sessionStoreProvider.overrideWithValue(store)],
+        overrides: [
+          sessionStoreProvider.overrideWithValue(store),
+          privacyPolicyConfigProvider.overrideWithValue(_policy),
+          privacyConsentRepositoryProvider.overrideWithValue(
+            _AcceptedPrivacyRepository(),
+          ),
+        ],
         child: MyApp(routeBundle: createStarterRouteBundle()),
       ),
     );

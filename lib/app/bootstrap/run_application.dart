@@ -78,7 +78,8 @@ Future<void> runApplication(
   }
 
   // runApp 后立刻有可绘制的启动界面。BootstrapGate 只等待环境校验和
-  // LocalStorage；监控在首帧后预热，SQLite 在第一次 CRUD 时按需打开。
+  // LocalStorage；随后 PrivacyConsentGate 必要时清理残留登录会话，再创建 MyApp。
+  // 需要隐私授权的 Warmup 还会等待用户同意，SQLite 仍在第一次 CRUD 时按需打开。
   final application = BootstrapGate(routeBundle: routeBundle);
   // ProviderScope 即使现在被创建，Provider 仍然是惰性的。真正读取主题和登录态
   // 发生在 BootstrapGate 完成关键任务、创建 MyApp 之后，因此不会提前访问存储。

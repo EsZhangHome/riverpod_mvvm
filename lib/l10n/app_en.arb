@@ -8,7 +8,53 @@
     }
   },
   "retry": "Retry",
+  "privacyConsentTitle": "Agreements and privacy notice",
+  "privacyLoginConsentIntroduction": "Review and accept the privacy policy and user agreement before signing in. Accepting selects the agreement option and continues when both credentials are present; otherwise it only selects the option without showing an input message. Declining clears the selection and stays on sign-in.",
+  "privacyPolicyUpgradeTitle": "Privacy policy updated",
+  "privacyPolicyUpgradeIntroduction": "The privacy policy has changed. Accept to remain on the current screen. Declining signs out the current account and returns to sign-in; the update will be shown again next launch.",
+  "privacyPolicyUpgradeLoginIntroduction": "The privacy policy has changed. Review it before signing in again. Accepting continues this sign-in; declining closes the dialog and stays on sign-in.",
+  "privacyConsentVersion": "Consent version: {version}",
+  "@privacyConsentVersion": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "privacyDocumentVersion": "Policy document version: {version}",
+  "@privacyDocumentVersion": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "userAgreementDocumentVersion": "User agreement document version: {version}",
+  "@userAgreementDocumentVersion": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "privacyPolicyAddress": "Full privacy policy address",
+  "viewFullPrivacyPolicy": "Read the full privacy policy",
+  "viewFullUserAgreement": "Read the full user agreement",
+  "privacyPolicyOpenFailed": "The agreement page could not be opened. Check your browser or network and try again.",
+  "privacyDisclosureDataTitle": "Information processed",
+  "privacyDisclosureDataBody": "Sign-in processes the account and password you enter. Other information must be explained when you use the corresponding feature.",
+  "privacyDisclosurePurposeTitle": "Why it is processed",
+  "privacyDisclosurePurposeBody": "It is used for identity verification, session maintenance, and account security, within what the current feature requires.",
+  "privacyDisclosureThirdPartyTitle": "Permissions and third parties",
+  "privacyDisclosureThirdPartyBody": "Consent-protected deferred capabilities do not start before acceptance. A real project must list its actual permissions, SDKs, shared data, and purposes in the full policy.",
+  "privacyDisclosureRightsTitle": "Your choices and rights",
+  "privacyDisclosureRightsBody": "You may decline and remain on sign-in. A real project must also provide withdrawal, correction, deletion, account closure, and complaint channels.",
+  "agreeAndContinue": "Agree and continue",
+  "agreeAndContinueUsing": "Agree and keep using",
+  "declineAndLogout": "Decline and sign out",
+  "disagree": "Disagree",
+  "privacyConsentSaveFailed": "The consent choice could not be saved. The sign-in request has not been sent. Try again.",
+  "privacyLogoutFailed": "Sign-out or session cleanup failed. The current screen remains protected. Try again.",
+  "privacyLoginPreparationFailed": "The previous sign-in state could not be cleared, so sign-in is temporarily unavailable. Try again.",
   "login": "Sign in",
+  "loginAgreementPrefix": "I agree to the",
+  "privacyAgreementName": "Privacy Policy",
+  "agreementAnd": "and",
+  "userAgreementName": "User Agreement",
   "account": "Phone or email",
   "password": "Password",
   "enterAccount": "Enter your phone number or email",

@@ -14,5 +14,13 @@ void main() {
       expect(EnvConfig.charlesProxyPort, 8888);
       expect(EnvConfig.allowCharlesBadCertificate, isFalse);
     });
+
+    test('privacy consent uses one stable policy version and absolute URL', () {
+      expect(EnvConfig.privacyPolicyVersion, isNotEmpty);
+      expect(EnvConfig.privacyPolicyDocumentVersion, isNotEmpty);
+      expect(Uri.parse(EnvConfig.privacyPolicyUrl).isAbsolute, isTrue);
+      expect(EnvConfig.userAgreementDocumentVersion, isNotEmpty);
+      expect(Uri.parse(EnvConfig.userAgreementUrl).isAbsolute, isTrue);
+    });
   });
 }

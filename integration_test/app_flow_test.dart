@@ -24,9 +24,14 @@ import 'package:riverpod_mvvm/features/auth/login/login_providers.dart';
 import 'package:riverpod_mvvm/features/auth/login/model/login_request.dart';
 import 'package:riverpod_mvvm/features/auth/login/model/login_response.dart';
 import 'package:riverpod_mvvm/features/auth/login/repository/login_repository.dart';
+import 'package:riverpod_mvvm/features/privacy_consent/privacy_consent.dart';
 
 const _homePath = '/integration-home';
 const _protectedReportPath = '/integration-report';
+const _policy = PrivacyPolicyConfig(
+  version: 'integration-v1',
+  url: 'https://example.test/privacy',
+);
 
 /// 内存会话仓库实现真实 SessionStore 契约，但不会访问 Keychain/Keystore。
 /// 同一个实例可跨 ProviderContainer 保存状态，用来模拟 App 重启后的会话恢复。
@@ -81,6 +86,30 @@ final class _OnlineNetworkStatusService implements NetworkStatusService {
   Stream<NetworkStatus> watchStatus() => const Stream.empty();
 }
 
+final class _MemoryPrivacyConsentRepository
+    implements PrivacyConsentRepository {
+  _MemoryPrivacyConsentRepository(this.acceptedVersion);
+
+  String? acceptedVersion;
+
+  @override
+  PrivacyConsentRecord? readAcceptedPolicyRecord() => acceptedVersion == null
+      ? null
+      : PrivacyConsentRecord.fromLegacyVersion(acceptedVersion!);
+
+  @override
+  Future<bool> saveAcceptedPolicyRecord(PrivacyConsentRecord record) async {
+    acceptedVersion = record.consentVersion;
+    return true;
+  }
+
+  @override
+  Future<bool> clearAcceptedPolicyVersion() async {
+    acceptedVersion = null;
+    return true;
+  }
+}
+
 AppRouteBundle _routeBundle() {
   return AppRouteBundle(
     authenticatedHome: _homePath,
@@ -103,11 +132,18 @@ AppRouteBundle _routeBundle() {
 Widget _buildApp({
   required _MemorySessionStore store,
   required LoginRepository repository,
+  bool hasAcceptedPrivacy = true,
 }) {
   return ProviderScope(
     overrides: [
       sessionStoreProvider.overrideWithValue(store),
       loginRepositoryProvider.overrideWithValue(repository),
+      privacyPolicyConfigProvider.overrideWithValue(_policy),
+      privacyConsentRepositoryProvider.overrideWithValue(
+        _MemoryPrivacyConsentRepository(
+          hasAcceptedPrivacy ? _policy.version : null,
+        ),
+      ),
       networkStatusServiceProvider.overrideWithValue(
         _OnlineNetworkStatusService(),
       ),
@@ -124,7 +160,13 @@ void main() {
     (tester) async {
       final store = _MemorySessionStore();
       final repository = _SuccessfulLoginRepository();
-      await tester.pumpWidget(_buildApp(store: store, repository: repository));
+      await tester.pumpWidget(
+        _buildApp(
+          store: store,
+          repository: repository,
+          hasAcceptedPrivacy: false,
+        ),
+      );
       await tester.pumpAndSettle();
 
       // 未登录时主动访问受保护报表。守卫会进入登录页并把原目标编码为 returnTo。
@@ -134,6 +176,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('login.submit')), findsOneWidget);
 
+      // 首次进入登录页不自动弹协议。用户可以先完整输入，再由未勾选的登录动作
+      // 打开统一弹窗；同意后应续接这一次登录，不要求再点击第二次。
+      expect(find.byKey(const ValueKey('privacy.dialog')), findsNothing);
+      expect(repository.receivedRequest, isNull);
       await tester.enterText(
         find.byKey(const ValueKey('login.account')),
         '  user@example.com  ',
@@ -143,6 +189,11 @@ void main() {
         ' pass word ',
       );
       await tester.tap(find.byKey(const ValueKey('login.submit')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
+      expect(repository.receivedRequest, isNull);
+      await tester.tap(find.byKey(const ValueKey('privacy.accept')));
       await tester.pumpAndSettle();
 
       // 一次点击已经依次完成参数处理、Repository 请求、SessionStore 持久化、

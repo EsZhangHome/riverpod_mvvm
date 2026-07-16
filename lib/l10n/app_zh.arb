@@ -8,7 +8,53 @@
     }
   },
   "retry": "重试",
+  "privacyConsentTitle": "协议与隐私保护说明",
+  "privacyLoginConsentIntroduction": "登录前需要你阅读并同意隐私协议和用户协议。同意后会选中登录页协议选项；账号密码已填写时继续登录，未填写时只选中协议，不显示输入提示。不同意则取消选中并停留在登录页。",
+  "privacyPolicyUpgradeTitle": "隐私政策已更新",
+  "privacyPolicyUpgradeIntroduction": "隐私政策内容或版本已更新，请阅读后选择。同意后继续停留在当前页面；不同意将退出当前账号并返回登录页面。下次启动时仍会再次提示。",
+  "privacyPolicyUpgradeLoginIntroduction": "隐私政策已经更新。重新登录前请阅读并确认；同意后继续本次登录，不同意则关闭弹窗并停留在登录页。",
+  "privacyConsentVersion": "授权版本：{version}",
+  "@privacyConsentVersion": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "privacyDocumentVersion": "政策文档版本：{version}",
+  "@privacyDocumentVersion": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "userAgreementDocumentVersion": "用户协议文档版本：{version}",
+  "@userAgreementDocumentVersion": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "privacyPolicyAddress": "完整隐私政策地址",
+  "viewFullPrivacyPolicy": "阅读完整隐私政策",
+  "viewFullUserAgreement": "阅读完整用户协议",
+  "privacyPolicyOpenFailed": "暂时无法打开协议页面，请检查系统浏览器或网络后重试。",
+  "privacyDisclosureDataTitle": "处理哪些信息",
+  "privacyDisclosureDataBody": "登录时处理你主动填写的账号和密码；具体业务需要其他信息时，必须在使用对应功能前另行说明。",
+  "privacyDisclosurePurposeTitle": "为什么处理",
+  "privacyDisclosurePurposeBody": "用于身份验证、维护登录状态和保障账号安全，不应超出实现当前功能所必需的范围。",
+  "privacyDisclosureThirdPartyTitle": "权限与第三方",
+  "privacyDisclosureThirdPartyBody": "同意前不会启动需要授权的延迟能力；正式项目必须在完整政策中逐项列明实际权限、SDK、共享数据和用途。",
+  "privacyDisclosureRightsTitle": "你的选择和权利",
+  "privacyDisclosureRightsBody": "你可以拒绝并停留在登录页。正式项目还必须提供撤回同意、更正、删除、注销账号和投诉渠道。",
+  "agreeAndContinue": "同意并继续",
+  "agreeAndContinueUsing": "同意并继续使用",
+  "declineAndLogout": "不同意并退出登录",
+  "disagree": "不同意",
+  "privacyConsentSaveFailed": "同意状态保存失败，登录请求尚未发出，请重试。",
+  "privacyLogoutFailed": "退出登录或清理会话失败，当前页面仍被保护，请重试。",
+  "privacyLoginPreparationFailed": "历史登录状态清理失败，暂时无法进入登录页，请重试。",
   "login": "登录",
+  "loginAgreementPrefix": "请同意",
+  "privacyAgreementName": "《隐私协议》",
+  "agreementAnd": "和",
+  "userAgreementName": "《用户协议》",
   "account": "手机号/邮箱",
   "password": "密码",
   "enterAccount": "请输入手机号或邮箱",

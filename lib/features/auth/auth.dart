@@ -13,6 +13,8 @@ export 'session/session_providers.dart'
 export 'session/repository/session_refresher.dart' show SessionRefresher;
 export 'session/repository/session_store.dart' show SessionStore;
 export 'login/view/login_page.dart';
+export 'login/view_model/login_agreement_view_model.dart'
+    show loginAgreementSelectionProvider;
 export 'session/view_model/auth_view_model.dart'
     show
         AuthNotifier,

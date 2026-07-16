@@ -116,11 +116,197 @@ abstract class AppLocalizations {
   /// **'重试'**
   String get retry;
 
+  /// No description provided for @privacyConsentTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'协议与隐私保护说明'**
+  String get privacyConsentTitle;
+
+  /// No description provided for @privacyLoginConsentIntroduction.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录前需要你阅读并同意隐私协议和用户协议。同意后会选中登录页协议选项；账号密码已填写时继续登录，未填写时只选中协议，不显示输入提示。不同意则取消选中并停留在登录页。'**
+  String get privacyLoginConsentIntroduction;
+
+  /// No description provided for @privacyPolicyUpgradeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'隐私政策已更新'**
+  String get privacyPolicyUpgradeTitle;
+
+  /// No description provided for @privacyPolicyUpgradeIntroduction.
+  ///
+  /// In zh, this message translates to:
+  /// **'隐私政策内容或版本已更新，请阅读后选择。同意后继续停留在当前页面；不同意将退出当前账号并返回登录页面。下次启动时仍会再次提示。'**
+  String get privacyPolicyUpgradeIntroduction;
+
+  /// No description provided for @privacyPolicyUpgradeLoginIntroduction.
+  ///
+  /// In zh, this message translates to:
+  /// **'隐私政策已经更新。重新登录前请阅读并确认；同意后继续本次登录，不同意则关闭弹窗并停留在登录页。'**
+  String get privacyPolicyUpgradeLoginIntroduction;
+
+  /// No description provided for @privacyConsentVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'授权版本：{version}'**
+  String privacyConsentVersion(String version);
+
+  /// No description provided for @privacyDocumentVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'政策文档版本：{version}'**
+  String privacyDocumentVersion(String version);
+
+  /// No description provided for @userAgreementDocumentVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'用户协议文档版本：{version}'**
+  String userAgreementDocumentVersion(String version);
+
+  /// No description provided for @privacyPolicyAddress.
+  ///
+  /// In zh, this message translates to:
+  /// **'完整隐私政策地址'**
+  String get privacyPolicyAddress;
+
+  /// No description provided for @viewFullPrivacyPolicy.
+  ///
+  /// In zh, this message translates to:
+  /// **'阅读完整隐私政策'**
+  String get viewFullPrivacyPolicy;
+
+  /// No description provided for @viewFullUserAgreement.
+  ///
+  /// In zh, this message translates to:
+  /// **'阅读完整用户协议'**
+  String get viewFullUserAgreement;
+
+  /// No description provided for @privacyPolicyOpenFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法打开协议页面，请检查系统浏览器或网络后重试。'**
+  String get privacyPolicyOpenFailed;
+
+  /// No description provided for @privacyDisclosureDataTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'处理哪些信息'**
+  String get privacyDisclosureDataTitle;
+
+  /// No description provided for @privacyDisclosureDataBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录时处理你主动填写的账号和密码；具体业务需要其他信息时，必须在使用对应功能前另行说明。'**
+  String get privacyDisclosureDataBody;
+
+  /// No description provided for @privacyDisclosurePurposeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'为什么处理'**
+  String get privacyDisclosurePurposeTitle;
+
+  /// No description provided for @privacyDisclosurePurposeBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'用于身份验证、维护登录状态和保障账号安全，不应超出实现当前功能所必需的范围。'**
+  String get privacyDisclosurePurposeBody;
+
+  /// No description provided for @privacyDisclosureThirdPartyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'权限与第三方'**
+  String get privacyDisclosureThirdPartyTitle;
+
+  /// No description provided for @privacyDisclosureThirdPartyBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'同意前不会启动需要授权的延迟能力；正式项目必须在完整政策中逐项列明实际权限、SDK、共享数据和用途。'**
+  String get privacyDisclosureThirdPartyBody;
+
+  /// No description provided for @privacyDisclosureRightsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'你的选择和权利'**
+  String get privacyDisclosureRightsTitle;
+
+  /// No description provided for @privacyDisclosureRightsBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'你可以拒绝并停留在登录页。正式项目还必须提供撤回同意、更正、删除、注销账号和投诉渠道。'**
+  String get privacyDisclosureRightsBody;
+
+  /// No description provided for @agreeAndContinue.
+  ///
+  /// In zh, this message translates to:
+  /// **'同意并继续'**
+  String get agreeAndContinue;
+
+  /// No description provided for @agreeAndContinueUsing.
+  ///
+  /// In zh, this message translates to:
+  /// **'同意并继续使用'**
+  String get agreeAndContinueUsing;
+
+  /// No description provided for @declineAndLogout.
+  ///
+  /// In zh, this message translates to:
+  /// **'不同意并退出登录'**
+  String get declineAndLogout;
+
+  /// No description provided for @disagree.
+  ///
+  /// In zh, this message translates to:
+  /// **'不同意'**
+  String get disagree;
+
+  /// No description provided for @privacyConsentSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'同意状态保存失败，登录请求尚未发出，请重试。'**
+  String get privacyConsentSaveFailed;
+
+  /// No description provided for @privacyLogoutFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出登录或清理会话失败，当前页面仍被保护，请重试。'**
+  String get privacyLogoutFailed;
+
+  /// No description provided for @privacyLoginPreparationFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'历史登录状态清理失败，暂时无法进入登录页，请重试。'**
+  String get privacyLoginPreparationFailed;
+
   /// No description provided for @login.
   ///
   /// In zh, this message translates to:
   /// **'登录'**
   String get login;
+
+  /// No description provided for @loginAgreementPrefix.
+  ///
+  /// In zh, this message translates to:
+  /// **'请同意'**
+  String get loginAgreementPrefix;
+
+  /// No description provided for @privacyAgreementName.
+  ///
+  /// In zh, this message translates to:
+  /// **'《隐私协议》'**
+  String get privacyAgreementName;
+
+  /// No description provided for @agreementAnd.
+  ///
+  /// In zh, this message translates to:
+  /// **'和'**
+  String get agreementAnd;
+
+  /// No description provided for @userAgreementName.
+  ///
+  /// In zh, this message translates to:
+  /// **'《用户协议》'**
+  String get userAgreementName;
 
   /// No description provided for @account.
   ///

@@ -52,6 +52,49 @@ class EnvConfig {
     defaultValue: 'Riverpod MVVM',
   );
 
+  // ==================== 隐私政策配置 ====================
+
+  /// 当前要求用户同意的隐私政策版本。
+  ///
+  /// 这里必须是稳定业务版本，例如 `2026.07.01`，不能使用构建时间或随机值。App
+  /// 会把“用户已同意的版本”保存到普通偏好；当本值升级后，旧版本不再匹配，
+  /// `PrivacyConsentHost` 会在当前页面上展示全局升级弹窗。首次没有记录时先进入
+  /// 登录页，只有未勾选协议并点击登录才展示授权弹窗。
+  static const String privacyPolicyVersion = String.fromEnvironment(
+    'ENV_PRIVACY_POLICY_VERSION',
+    defaultValue: 'starter-1',
+  );
+
+  /// 当前完整隐私政策文档版本。
+  ///
+  /// 它可以随错别字、排版或联系方式修订而变化，但不会单独触发重新同意。只有上面的
+  /// ENV_PRIVACY_POLICY_VERSION（授权版本）变化才会进入政策升级状态。
+  static const String privacyPolicyDocumentVersion = String.fromEnvironment(
+    'ENV_PRIVACY_POLICY_DOCUMENT_VERSION',
+    defaultValue: 'starter-document-1',
+  );
+
+  /// 用户可以阅读的完整隐私政策地址。
+  ///
+  /// 底座页面会展示该地址，真实项目必须替换为可公开访问的 HTTPS 页面。它不是
+  /// 接口 Base URL，也不要在 query 中拼接用户 id、设备标识或登录态。
+  static const String privacyPolicyUrl = String.fromEnvironment(
+    'ENV_PRIVACY_POLICY_URL',
+    defaultValue: 'https://privacy.example.com/policy',
+  );
+
+  /// 当前用户协议正文版本，用于在同意记录中准确追溯用户看到的文本。
+  static const String userAgreementDocumentVersion = String.fromEnvironment(
+    'ENV_USER_AGREEMENT_DOCUMENT_VERSION',
+    defaultValue: 'starter-user-agreement-1',
+  );
+
+  /// 用户可以阅读的完整用户协议地址。
+  static const String userAgreementUrl = String.fromEnvironment(
+    'ENV_USER_AGREEMENT_URL',
+    defaultValue: 'https://privacy.example.com/user-agreement',
+  );
+
   // ==================== 网络配置 ====================
 
   /// 接口基础地址。
@@ -204,6 +247,11 @@ class EnvConfig {
     environment: environment,
     appName: appName,
     apiBaseUrl: apiBaseUrl,
+    privacyPolicyVersion: privacyPolicyVersion,
+    privacyPolicyDocumentVersion: privacyPolicyDocumentVersion,
+    privacyPolicyUrl: privacyPolicyUrl,
+    userAgreementDocumentVersion: userAgreementDocumentVersion,
+    userAgreementUrl: userAgreementUrl,
     enableMock: enableMock,
     enableDebugLogs: isDebug,
     enableCharlesProxy: enableCharlesProxy,

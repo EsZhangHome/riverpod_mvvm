@@ -23,6 +23,10 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      # 开发模式会阻断未登记 SDK、权限和明确敏感标识调用；隐私政策等真实项目信息
+      # 在底座阶段只提示，客户发布流水线应再对 Release APK 执行 release 模式。
+      - name: Audit privacy compliance
+        run: dart run tool/privacy/privacy_audit.dart --mode development
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test integration_test tool
       - name: Verify generated code

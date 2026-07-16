@@ -4,7 +4,7 @@
 //
 // 这里只执行“不完成就不能安全创建业务 Provider”的任务：
 // 1. 校验当前构建配置是否安全；
-// 2. 准备恢复登录用户和主题所需的最小本地存储。
+// 2. 准备恢复隐私同意、登录用户和主题所需的最小本地存储。
 //
 // 数据库、埋点和其他非首屏能力不放在这里。它们分别由按需 Provider 和
 // AppWarmup 处理，否则每增加一个 SDK 都会让用户更晚看到第一帧。
@@ -156,7 +156,7 @@ class AppBootstrap {
     }
 
     // LocalStorage 必须在内层业务 ProviderScope 之前尝试初始化：themeProvider
-    // 首次构建会同步恢复主题，SessionStore 也可能读取旧版用户 JSON 做一次迁移。
+    // 首次构建会同步恢复隐私版本和主题，SessionStore 也可能读取旧版用户 JSON 做迁移。
     // 失败时仍允许降级启动：主题回退默认值，新格式安全会话不依赖 LocalStorage。
     await _runStage('storage', _initializeStorage, issues);
 

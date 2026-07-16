@@ -20,7 +20,118 @@ class AppLocalizationsEn extends AppLocalizations {
   String get retry => 'Retry';
 
   @override
+  String get privacyConsentTitle => 'Agreements and privacy notice';
+
+  @override
+  String get privacyLoginConsentIntroduction =>
+      'Review and accept the privacy policy and user agreement before signing in. Accepting selects the agreement option and continues when both credentials are present; otherwise it only selects the option without showing an input message. Declining clears the selection and stays on sign-in.';
+
+  @override
+  String get privacyPolicyUpgradeTitle => 'Privacy policy updated';
+
+  @override
+  String get privacyPolicyUpgradeIntroduction =>
+      'The privacy policy has changed. Accept to remain on the current screen. Declining signs out the current account and returns to sign-in; the update will be shown again next launch.';
+
+  @override
+  String get privacyPolicyUpgradeLoginIntroduction =>
+      'The privacy policy has changed. Review it before signing in again. Accepting continues this sign-in; declining closes the dialog and stays on sign-in.';
+
+  @override
+  String privacyConsentVersion(String version) {
+    return 'Consent version: $version';
+  }
+
+  @override
+  String privacyDocumentVersion(String version) {
+    return 'Policy document version: $version';
+  }
+
+  @override
+  String userAgreementDocumentVersion(String version) {
+    return 'User agreement document version: $version';
+  }
+
+  @override
+  String get privacyPolicyAddress => 'Full privacy policy address';
+
+  @override
+  String get viewFullPrivacyPolicy => 'Read the full privacy policy';
+
+  @override
+  String get viewFullUserAgreement => 'Read the full user agreement';
+
+  @override
+  String get privacyPolicyOpenFailed =>
+      'The agreement page could not be opened. Check your browser or network and try again.';
+
+  @override
+  String get privacyDisclosureDataTitle => 'Information processed';
+
+  @override
+  String get privacyDisclosureDataBody =>
+      'Sign-in processes the account and password you enter. Other information must be explained when you use the corresponding feature.';
+
+  @override
+  String get privacyDisclosurePurposeTitle => 'Why it is processed';
+
+  @override
+  String get privacyDisclosurePurposeBody =>
+      'It is used for identity verification, session maintenance, and account security, within what the current feature requires.';
+
+  @override
+  String get privacyDisclosureThirdPartyTitle =>
+      'Permissions and third parties';
+
+  @override
+  String get privacyDisclosureThirdPartyBody =>
+      'Consent-protected deferred capabilities do not start before acceptance. A real project must list its actual permissions, SDKs, shared data, and purposes in the full policy.';
+
+  @override
+  String get privacyDisclosureRightsTitle => 'Your choices and rights';
+
+  @override
+  String get privacyDisclosureRightsBody =>
+      'You may decline and remain on sign-in. A real project must also provide withdrawal, correction, deletion, account closure, and complaint channels.';
+
+  @override
+  String get agreeAndContinue => 'Agree and continue';
+
+  @override
+  String get agreeAndContinueUsing => 'Agree and keep using';
+
+  @override
+  String get declineAndLogout => 'Decline and sign out';
+
+  @override
+  String get disagree => 'Disagree';
+
+  @override
+  String get privacyConsentSaveFailed =>
+      'The consent choice could not be saved. The sign-in request has not been sent. Try again.';
+
+  @override
+  String get privacyLogoutFailed =>
+      'Sign-out or session cleanup failed. The current screen remains protected. Try again.';
+
+  @override
+  String get privacyLoginPreparationFailed =>
+      'The previous sign-in state could not be cleared, so sign-in is temporarily unavailable. Try again.';
+
+  @override
   String get login => 'Sign in';
+
+  @override
+  String get loginAgreementPrefix => 'I agree to the';
+
+  @override
+  String get privacyAgreementName => 'Privacy Policy';
+
+  @override
+  String get agreementAnd => 'and';
+
+  @override
+  String get userAgreementName => 'User Agreement';
 
   @override
   String get account => 'Phone or email';

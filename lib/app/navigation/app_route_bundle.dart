@@ -148,11 +148,22 @@ class AppRouteBundle {
   /// 示例：
   /// ```dart
   /// loginPath: '/sso-login',
-  /// loginBuilder: (context, state) => const SsoLoginPage(),
+  /// loginBuilder: (context, state) => SsoLoginPage(
+  ///   onSubmit: () async {
+  ///     // 默认 LoginPage 已自动执行这一步；替换登录页后由项目显式保留。
+  ///     if (!await requestPrivacyConsentBeforeLogin(
+  ///       context,
+  ///       agreementSelected: state.agreementSelected,
+  ///     )) return;
+  ///     await submitSsoLogin();
+  ///   },
+  /// ),
   /// ```
   ///
   /// 这里只负责“创建登录页面”。登录成功后仍应更新 authProvider，由路由守卫
-  /// 根据最新 AuthState 自动跳转，而不是在登录页面写死业务首页路径。
+  /// 根据最新 AuthState 自动跳转，而不是在登录页面写死业务首页路径。自定义登录页
+  /// 会替换底座默认 LoginPage，因此项目必须把隐私授权等登录前置流程一起接入；
+  /// README 的“自定义登录页”章节给出了完整写法。
   final Widget Function(BuildContext context, GoRouterState state)?
   loginBuilder;
 
