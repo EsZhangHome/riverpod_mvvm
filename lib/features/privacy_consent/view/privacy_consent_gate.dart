@@ -9,15 +9,14 @@ import '../view_model/privacy_consent_view_model.dart';
 
 /// MyApp 前面的首次登录准备门，不再负责自动展示隐私协议。
 ///
-/// 新交互要求 App 首次打开先进入登录页，不自动打断输入；用户未勾选协议并点击登录
-/// 时才由根 Host 展示弹窗。因此这里不直接画弹窗，只负责一件事：如果从未同意过
-/// 任何政策，先清除安全存储中可能残留
-/// 的旧会话，再创建 MyApp。这样普通偏好被清除、但 iOS Keychain 仍保留 token 时，
+/// App 首次打开时，本组件先完成会话安全准备，再由 MyApp 进入登录页并自动显示
+/// 协议。因此这里不直接画弹窗，只负责一件事：如果从未同意过任何政策，先清除
+/// 安全存储中可能残留的旧会话，再创建 MyApp。这样普通偏好被清除、但 iOS
+/// Keychain 仍保留 token 时，
 /// 也不会绕过登录页直接恢复首页。
 ///
-/// 登录动作触发的首次弹窗和自动出现的政策升级弹窗都由 MyApp 内的
-/// PrivacyConsentHost 处理；登录页的 `beforeLogin` 回调负责产生首次请求。各入口共享
-/// 同一个
+/// 首次自动弹窗、登录动作再次触发和政策升级都由 MyApp 内的 PrivacyConsentHost
+/// 处理；登录页的 `beforeLogin` 回调负责拒绝后的再次请求。各入口共享同一个
 /// privacyConsentProvider，不会产生多份授权状态。
 final class PrivacyConsentGate extends ConsumerStatefulWidget {
   const PrivacyConsentGate({

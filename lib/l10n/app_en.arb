@@ -9,6 +9,7 @@
   },
   "retry": "Retry",
   "privacyConsentTitle": "Agreements and privacy notice",
+  "privacyInitialConsentIntroduction": "Before first use, review the privacy policy and user agreement. Accepting selects the agreement option on sign-in. Declining closes this dialog and remains on sign-in without sending a request; it will be shown again on the next launch.",
   "privacyLoginConsentIntroduction": "Review and accept the privacy policy and user agreement before signing in. Accepting selects the agreement option and continues when both credentials are present; otherwise it only selects the option without showing an input message. Declining clears the selection and stays on sign-in.",
   "privacyPolicyUpgradeTitle": "Privacy policy updated",
   "privacyPolicyUpgradeIntroduction": "The privacy policy has changed. Accept to remain on the current screen. Declining signs out the current account and returns to sign-in; the update will be shown again next launch.",

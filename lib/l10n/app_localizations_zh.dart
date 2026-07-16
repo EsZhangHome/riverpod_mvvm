@@ -23,6 +23,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get privacyConsentTitle => '协议与隐私保护说明';
 
   @override
+  String get privacyInitialConsentIntroduction =>
+      '首次使用前，请阅读隐私协议和用户协议。同意后会选中登录页协议选项；不同意只关闭本次弹窗并停留在登录页，不会发送登录请求。下次启动仍会再次提示。';
+
+  @override
   String get privacyLoginConsentIntroduction =>
       '登录前需要你阅读并同意隐私协议和用户协议。同意后会选中登录页协议选项；账号密码已填写时继续登录，未填写时只选中协议，不显示输入提示。不同意则取消选中并停留在登录页。';
 

@@ -59,7 +59,7 @@ class EnvConfig {
   /// 这里必须是稳定业务版本，例如 `2026.07.01`，不能使用构建时间或随机值。App
   /// 会把“用户已同意的版本”保存到普通偏好；当本值升级后，旧版本不再匹配，
   /// `PrivacyConsentHost` 会在当前页面上展示全局升级弹窗。首次没有记录时先进入
-  /// 登录页，只有未勾选协议并点击登录才展示授权弹窗。
+  /// 登录页并自动提示；拒绝后未勾选点击登录仍会再次展示。
   static const String privacyPolicyVersion = String.fromEnvironment(
     'ENV_PRIVACY_POLICY_VERSION',
     defaultValue: 'starter-1',

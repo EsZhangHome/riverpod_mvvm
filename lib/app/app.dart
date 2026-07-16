@@ -227,6 +227,13 @@ class _AppViewState extends ConsumerState<_AppView> {
 
     // 监听主题变化，MaterialApp 会在主题切换时正确重建
     final themeState = ref.watch(themeProvider);
+    // 首次自动提示必须等安全会话恢复结束，并确认路由进入未登录状态。select 只关注
+    // 认证阶段，token 等无关字段变化不会让根 MaterialApp 重建。
+    final showInitialPrivacyConsent = ref.watch(
+      authProvider.select(
+        (state) => state.status == AuthStatus.unauthenticated,
+      ),
+    );
     return MaterialApp.router(
       title: EnvConfig.appName,
       debugShowCheckedModeBanner: false,
@@ -244,6 +251,7 @@ class _AppViewState extends ConsumerState<_AppView> {
       builder: (context, child) {
         return PrivacyConsentHost(
           navigatorKey: _navigatorKey,
+          showInitialConsent: showInitialPrivacyConsent,
           // 隐私 Feature 不直接 import Auth；应用组合层在这里把“拒绝升级”连接到
           // AuthNotifier。logout 会立即清内存状态，GoRouter 自动返回登录页。
           onDeclineUpgrade: () => ref.read(authProvider.notifier).logout(),

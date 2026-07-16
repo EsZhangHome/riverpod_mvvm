@@ -23,6 +23,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get privacyConsentTitle => 'Agreements and privacy notice';
 
   @override
+  String get privacyInitialConsentIntroduction =>
+      'Before first use, review the privacy policy and user agreement. Accepting selects the agreement option on sign-in. Declining closes this dialog and remains on sign-in without sending a request; it will be shown again on the next launch.';
+
+  @override
   String get privacyLoginConsentIntroduction =>
       'Review and accept the privacy policy and user agreement before signing in. Accepting selects the agreement option and continues when both credentials are present; otherwise it only selects the option without showing an input message. Declining clears the selection and stays on sign-in.';
 

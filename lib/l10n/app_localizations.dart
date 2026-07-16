@@ -122,6 +122,12 @@ abstract class AppLocalizations {
   /// **'协议与隐私保护说明'**
   String get privacyConsentTitle;
 
+  /// No description provided for @privacyInitialConsentIntroduction.
+  ///
+  /// In zh, this message translates to:
+  /// **'首次使用前，请阅读隐私协议和用户协议。同意后会选中登录页协议选项；不同意只关闭本次弹窗并停留在登录页，不会发送登录请求。下次启动仍会再次提示。'**
+  String get privacyInitialConsentIntroduction;
+
   /// No description provided for @privacyLoginConsentIntroduction.
   ///
   /// In zh, this message translates to:

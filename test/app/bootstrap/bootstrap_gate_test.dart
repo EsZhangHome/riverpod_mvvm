@@ -102,15 +102,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 首次启动先进入登录页但不自动弹窗；需要同意后才能运行的任务仍未启动。
+    // 首次启动进入登录页后自动显示协议；需要同意后才能运行的任务仍未启动。
     expect(find.byKey(const ValueKey('login.submit')), findsOneWidget);
-    expect(find.byKey(const ValueKey('privacy.dialog')), findsNothing);
+    expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
     expect(warmupCount, 0);
 
-    // 空表单点击登录先进入协议门禁。接受后只选中协议，不显示账号 Toast，但已足以
-    // 放行需要授权的延迟初始化任务。
-    await tester.tap(find.byKey(const ValueKey('login.submit')));
-    await tester.pumpAndSettle();
+    // 接受自动弹窗后只选中协议，不显示账号 Toast，但已足以放行延迟初始化任务。
     final acceptButton = find.byKey(const ValueKey('privacy.accept'));
     expect(acceptButton, findsOneWidget);
     await tester.ensureVisible(acceptButton);

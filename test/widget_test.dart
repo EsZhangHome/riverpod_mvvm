@@ -154,7 +154,7 @@ void main() {
   });
 
   testWidgets(
-    'first login opens consent, accepts silently, then keeps validation intact',
+    'first launch opens consent, accepts silently, then keeps validation intact',
     (tester) async {
       final store = _MemorySessionStore(null);
 
@@ -167,8 +167,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 首次进入只展示未勾选的协议选项，不自动打断用户输入。
-      expect(find.byKey(const ValueKey('privacy.dialog')), findsNothing);
+      // 认证恢复确认进入登录页后，首次协议自动覆盖且复选框仍是未选中。
+      expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
       expect(
         tester
             .widget<Checkbox>(
@@ -178,12 +178,7 @@ void main() {
         isFalse,
       );
 
-      // 空表单且未勾选时，首次点击只打开协议弹窗，不提前提示账号或密码。
-      await tester.tap(find.byKey(const ValueKey('login.submit')));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
-
-      // 同意后仅选中协议。因为账号密码不完整，本次不调用登录校验，所以没有 Toast。
+      // 自动弹窗同意后仅选中协议。因为它不是登录提交动作，所以不会校验空表单。
       await tester.tap(find.byKey(const ValueKey('privacy.accept')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('privacy.dialog')), findsNothing);
@@ -215,6 +210,36 @@ void main() {
       );
       expect(find.byType(TextField), findsNWidgets(2));
       expect(find.byType(ErrorView), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'declining initial consent unchecks and login can request it again',
+    (tester) async {
+      await tester.pumpWidget(
+        _testScope(
+          store: _MemorySessionStore(null),
+          hasAcceptedPrivacy: false,
+          child: MyApp(routeBundle: _createTestRouteBundle()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final checkbox = find.byKey(const ValueKey('login.agreementCheckbox'));
+      expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('privacy.decline')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('privacy.dialog')), findsNothing);
+      expect(tester.widget<Checkbox>(checkbox).value, isFalse);
+
+      // 本次运行不再自动弹，但未勾选点击登录仍由同一个 Host 再次展示。
+      await tester.tap(find.byKey(const ValueKey('login.submit')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('privacy.decline')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Checkbox>(checkbox).value, isFalse);
     },
   );
 

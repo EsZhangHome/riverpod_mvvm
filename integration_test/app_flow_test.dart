@@ -169,6 +169,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // 首次进入登录页自动展示协议。此时没有输入，不会发登录请求；同意后只选中。
+      expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
+      expect(repository.receivedRequest, isNull);
+      await tester.tap(find.byKey(const ValueKey('privacy.accept')));
+      await tester.pumpAndSettle();
+
       // 未登录时主动访问受保护报表。守卫会进入登录页并把原目标编码为 returnTo。
       tester
           .element(find.byKey(const ValueKey('login.submit')))
@@ -176,10 +182,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('login.submit')), findsOneWidget);
 
-      // 首次进入登录页不自动弹协议。用户可以先完整输入，再由未勾选的登录动作
-      // 打开统一弹窗；同意后应续接这一次登录，不要求再点击第二次。
       expect(find.byKey(const ValueKey('privacy.dialog')), findsNothing);
-      expect(repository.receivedRequest, isNull);
       await tester.enterText(
         find.byKey(const ValueKey('login.account')),
         '  user@example.com  ',
@@ -189,11 +192,6 @@ void main() {
         ' pass word ',
       );
       await tester.tap(find.byKey(const ValueKey('login.submit')));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
-      expect(repository.receivedRequest, isNull);
-      await tester.tap(find.byKey(const ValueKey('privacy.accept')));
       await tester.pumpAndSettle();
 
       // 一次点击已经依次完成参数处理、Repository 请求、SessionStore 持久化、

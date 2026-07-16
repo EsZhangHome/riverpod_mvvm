@@ -107,6 +107,7 @@ Widget _dialogTestApp({
       supportedLocales: AppLocalizations.supportedLocales,
       builder: (context, child) => PrivacyConsentHost(
         navigatorKey: navigatorKey,
+        showInitialConsent: false,
         onDeclineUpgrade: () async {},
         child: child ?? const SizedBox.shrink(),
       ),
@@ -244,7 +245,7 @@ void main() {
     expect(state.failure, PrivacyConsentFailure.revokeFailed);
   });
 
-  testWidgets('首次启动只准备登录会话，不自动显示隐私弹窗', (tester) async {
+  testWidgets('PrivacyConsentGate 只准备会话，弹窗职责留给 MyApp Host', (tester) async {
     final repository = _MemoryPrivacyConsentRepository();
     var preparationCount = 0;
 
@@ -368,6 +369,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           builder: (context, child) => PrivacyConsentHost(
             navigatorKey: navigatorKey,
+            showInitialConsent: false,
             onDeclineUpgrade: () async {},
             child: child ?? const SizedBox.shrink(),
           ),
@@ -425,6 +427,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           builder: (context, child) => PrivacyConsentHost(
             navigatorKey: navigatorKey,
+            showInitialConsent: false,
             onDeclineUpgrade: () async {},
             child: child ?? const SizedBox.shrink(),
           ),
@@ -519,6 +522,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           builder: (context, child) => PrivacyConsentHost(
             navigatorKey: navigatorKey,
+            showInitialConsent: false,
             onDeclineUpgrade: () async {},
             child: child ?? const SizedBox.shrink(),
           ),
@@ -565,6 +569,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           builder: (context, child) => PrivacyConsentHost(
             navigatorKey: navigatorKey,
+            showInitialConsent: false,
             onDeclineUpgrade: () async {},
             child: child ?? const SizedBox.shrink(),
           ),
@@ -607,6 +612,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           builder: (context, child) => PrivacyConsentHost(
             navigatorKey: navigatorKey,
+            showInitialConsent: false,
             onDeclineUpgrade: () {
               logoutCount++;
               return logoutCompleter.future;

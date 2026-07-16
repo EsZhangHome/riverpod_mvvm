@@ -76,6 +76,23 @@ final class PrivacyConsentNotifier extends Notifier<PrivacyConsentState> {
     }
   }
 
+  /// 拒绝首次自动提示，只关闭本次运行中的自动弹窗。
+  ///
+  /// 这里不删除也不新增持久化数据，因此 `hasAcceptedCurrentPolicy` 仍为 false，
+  /// Warmup 与登录请求继续被拦截。用户之后未勾选点击登录时，协调器会再次显示同一
+  /// 个协议 Dialog；重新启动后也会因没有记录而重新进入首次提示状态。
+  bool dismissInitialConsentForCurrentSession() {
+    if (state.isSaving ||
+        state.status != PrivacyConsentStatus.initialConsentRequired) {
+      return false;
+    }
+    state = state.copyWith(
+      status: PrivacyConsentStatus.initialConsentDismissedForSession,
+      clearFailure: true,
+    );
+    return true;
+  }
+
   /// 记录“本次运行暂不接受政策升级”。
   ///
   /// 这个动作故意不修改 SharedPreferences：

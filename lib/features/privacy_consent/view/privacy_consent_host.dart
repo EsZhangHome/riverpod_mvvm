@@ -20,13 +20,15 @@ import 'privacy_policy_dialog.dart';
 /// - State 持有当前 Route 引用，可以在路由切换、Provider 更新时精确关闭这一层，
 ///   不会误 pop 业务页。
 ///
-/// 登录动作触发的协议提示和政策升级全部经过本 Presenter。Notifier 从不持有
-/// BuildContext，登录页也不再创建第二套 showDialog，MVVM 与 Riverpod 边界保持清晰。
+/// 首次自动提示、登录动作再次触发和政策升级全部经过本 Presenter。Notifier 从不
+/// 持有 BuildContext，登录页也不再创建第二套 showDialog，MVVM 与 Riverpod 边界
+/// 保持清晰。
 final class PrivacyConsentHost extends ConsumerStatefulWidget {
   const PrivacyConsentHost({
     super.key,
     required this.child,
     required this.navigatorKey,
+    required this.showInitialConsent,
     required this.onDeclineUpgrade,
   });
 
@@ -38,6 +40,12 @@ final class PrivacyConsentHost extends ConsumerStatefulWidget {
   /// MaterialApp.builder 的 context 位于 Navigator 外层，不能靠向下查找获得 Navigator；
   /// 显式注入同一个 key 才能稳定定位真正管理业务路由的根导航器。
   final GlobalKey<NavigatorState> navigatorKey;
+
+  /// 是否已经确认认证恢复结束且当前显示登录页，可以安全展示首次提示。
+  ///
+  /// 该值由 App 组合层根据 AuthState 注入。这样 Dialog 不会覆盖会话恢复页，也不会
+  /// 在已有登录会话时把“首次授权”和“政策升级”混为一谈。
+  final bool showInitialConsent;
 
   /// 拒绝政策升级后的会话清理动作，由 App 组合层注入 AuthNotifier.logout。
   final Future<void> Function() onDeclineUpgrade;
@@ -71,7 +79,8 @@ final class _PrivacyConsentHostState extends ConsumerState<PrivacyConsentHost> {
   @override
   void didUpdateWidget(covariant PrivacyConsentHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.navigatorKey != widget.navigatorKey) {
+    if (oldWidget.navigatorKey != widget.navigatorKey ||
+        oldWidget.showInitialConsent != widget.showInitialConsent) {
       _scheduleSynchronize();
     }
   }
@@ -134,9 +143,12 @@ final class _PrivacyConsentHostState extends ConsumerState<PrivacyConsentHost> {
   }
 
   bool _shouldShow(PrivacyConsentState consent, PrivacyPromptState prompt) {
-    // 首次安装不再自动弹窗：登录页先展示协议复选框，只有用户未勾选并点击登录时
-    // 才产生 pending request。政策升级仍是全局约束，需要立即盖住当前业务页面。
-    return consent.shouldShowPolicyUpgrade || prompt.hasPendingRequest;
+    final shouldShowInitial =
+        widget.showInitialConsent &&
+        consent.status == PrivacyConsentStatus.initialConsentRequired;
+    return shouldShowInitial ||
+        consent.shouldShowPolicyUpgrade ||
+        prompt.hasPendingRequest;
   }
 
   Widget _buildDialog(
@@ -188,9 +200,11 @@ final class _PrivacyConsentHostState extends ConsumerState<PrivacyConsentHost> {
     bool isUpgrade,
     PrivacyPromptState prompt,
   ) {
-    // 非升级弹窗只可能由登录页 pending request 产生；首次进入不再有“自动提示”
-    // 分支，因此这里直接使用登录场景文案，避免保留永远无法到达的旧逻辑。
-    if (!isUpgrade) return strings.privacyLoginConsentIntroduction;
+    if (!isUpgrade) {
+      return prompt.hasPendingRequest
+          ? strings.privacyLoginConsentIntroduction
+          : strings.privacyInitialConsentIntroduction;
+    }
     return prompt.hasPendingRequest
         ? strings.privacyPolicyUpgradeLoginIntroduction
         : strings.privacyPolicyUpgradeIntroduction;
@@ -217,9 +231,14 @@ final class _PrivacyConsentHostState extends ConsumerState<PrivacyConsentHost> {
       return;
     }
 
-    // 非升级弹窗一定来自上面的 pending request；若状态在用户点击瞬间发生了意外
-    // 切换，防御性地结束即可，绝不能把无来源的拒绝解释成其他状态迁移。
-    if (!isUpgrade) return;
+    // 没有 pending 且不是升级，说明这是首次进入登录页的自动提示。拒绝只改变本次
+    // 运行的内存状态，让 Dialog 关闭并保持复选框未选中；绝不保存“已同意”。
+    if (!isUpgrade) {
+      ref
+          .read(privacyConsentProvider.notifier)
+          .dismissInitialConsentForCurrentSession();
+      return;
+    }
 
     if (!coordinator.beginDeclineAction()) return;
     try {

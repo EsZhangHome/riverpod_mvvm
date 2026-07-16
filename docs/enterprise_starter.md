@@ -69,7 +69,7 @@ flutter test
 | runApp 前 | Engine 绑定、日志配置、全局异常入口 | `runApplication` |
 | 创建业务 ProviderScope 前 | 环境安全校验、Provider 立即依赖的最小存储 | `AppBootstrap` |
 | 创建 MyApp 前 | 恢复隐私版本；首次无记录时清除残留安全会话 | `PrivacyConsentGate` |
-| 业务 Navigator 上方 | 登录动作触发的授权与任意页面政策升级的统一覆盖 | `PrivacyConsentHost` |
+| 业务 Navigator 上方 | 首次自动授权、登录再次触发与任意页面政策升级的统一覆盖 | `PrivacyConsentHost` |
 | 登录请求发出前 | 读取协议勾选状态，未勾选时请求弹窗并阻止越过授权 | `requestPrivacyConsentBeforeLogin` |
 | MyApp 第一帧后 | 崩溃监控等需要尽早工作的旁路能力 | `AppWarmupPhase.afterFirstFrame` |
 | 会话恢复和目标页首帧后 | 远程配置、更新检查、统计 SDK | `AppWarmupPhase.afterSessionReady` |
@@ -264,8 +264,8 @@ Datadog 或公司平台时，实现 `LogSink`、`CrashReportingBackend`、`Perfo
 `runApplication` 参数注入；SDK 的耗时初始化仍由对应阶段的 AppWarmup 调用。
 
 隐私同意使用结构化记录而不是 `isFirstLaunch`。没有历史记录时，`PrivacyConsentGate` 先清理可能残留的安全
-会话，再创建 MyApp 并直接显示登录页。当前实现不会自动覆盖首次弹窗：默认 LoginPage 展示协议复选框，
-在未勾选并点击登录时调用
+会话，再创建 MyApp 并直接显示登录页。认证恢复确认未登录后，PrivacyConsentHost 自动显示一次首次弹窗；
+拒绝后本次运行不再自动重复。默认 LoginPage 展示协议复选框，在未勾选并点击登录时调用
 `requestPrivacyConsentBeforeLogin`，防止拒绝后直接提交；自定义 SSO/短信登录页替换默认 `loginBuilder` 后，
 也必须把自己的复选框值通过 `agreementSelected` 传给该函数。
 

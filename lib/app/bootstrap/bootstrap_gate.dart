@@ -87,8 +87,9 @@ class _BootstrapGateState extends State<BootstrapGate> {
 
         // 关键启动任务已经结束，现在才创建业务 ProviderScope。PrivacyConsentGate
         // 位于 MyApp 外层：从未同意过政策时先清理可能残留的安全会话，再创建 MyApp
-        // 并显示登录页；它不再自动弹协议。若只同意过旧版本，则不清会话，由 MyApp
-        // 保留当前路由并用升级 Host 全局覆盖弹窗。两种状态下 Warmup 都等待当前版本同意。
+        // 并显示登录页，再由 MyApp Host 自动显示首次协议。若只同意过旧版本，则不清
+        // 会话，由 MyApp 保留当前路由并用升级 Host 全局覆盖弹窗。两种状态下 Warmup
+        // 都等待当前版本同意。
         // overrideWithValue 让所有业务 Provider 共享同一份不可变启动结果；
         // 非关键预热会由 MyApp 按“首帧后/会话完成后”分级触发，不延长当前等待时间。
         return ProviderScope(

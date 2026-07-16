@@ -120,9 +120,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 首次打开先清除可能残留在安全存储里的会话并进入登录页。首次协议不再由 App
-    // 自动覆盖；真实登录页在用户未勾选并点击登录时才向 Host 发起显式请求。
-    expect(find.byKey(const ValueKey('privacy.dialog')), findsNothing);
+    // 首次打开先清除可能残留在安全存储里的会话，进入登录页后由 App Host 自动
+    // 显示一次协议。即使项目替换了默认登录页，首次门禁仍不会被绕过。
+    expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
     expect(find.byKey(const ValueKey('route.login')), findsOneWidget);
     expect(find.byKey(const ValueKey('route.home')), findsNothing);
 
@@ -131,6 +131,9 @@ void main() {
     expect(privacyRepository.acceptedVersion, isNull);
     expect(find.byKey(const ValueKey('route.home')), findsNothing);
 
+    await tester.tap(find.byKey(const ValueKey('privacy.decline')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('privacy.dialog')), findsNothing);
     expect(find.byKey(const ValueKey('route.login')), findsOneWidget);
     expect(privacyRepository.acceptedVersion, isNull);
   });
