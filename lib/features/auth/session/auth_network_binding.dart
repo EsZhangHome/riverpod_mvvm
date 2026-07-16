@@ -6,7 +6,7 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/providers/service_providers.dart';
+import '../../../core/providers/service_providers.dart';
 import 'view_model/auth_view_model.dart';
 
 /// 把最新 Token、401 退出和刷新命令绑定到同一个 ApiClient。

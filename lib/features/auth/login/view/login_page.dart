@@ -1,4 +1,4 @@
-// lib/features/auth/view/login_page.dart
+// lib/features/auth/login/view/login_page.dart
 //
 // 作用：登录页面，提供账号密码输入和登录按钮。
 //
@@ -11,12 +11,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/config/env_config.dart';
-import '../../../shared/state/view_state.dart';
-import '../../../l10n/app_localizations.dart';
-import '../../../shared/theme/app_spacing.dart';
-import '../../../shared/ui/app_toast.dart';
-import '../../../shared/ui/state_view.dart';
+import '../../../../core/config/env_config.dart';
+import '../../../../shared/state/view_state.dart';
+import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/theme/app_spacing.dart';
+import '../../../../shared/ui/app_toast.dart';
+import '../../../../shared/ui/state_view.dart';
 import '../view_model/login_view_model.dart';
 
 /// 登录模块的 View，只负责收集输入、展示 [LoginState] 和发送用户操作。

@@ -1,14 +1,14 @@
-// Auth Feature 内部的应用用例组装点。
+// Auth Feature 内部 Login 与 Session 两个子模块的应用用例组装点。
 //
 // application 只声明抽象，Repository 和 ViewModel 各自实现自己的职责；只有本文件
-// 同时知道这些具体对象，并通过 Riverpod 把它们连接起来。这样 LoginNotifier 不会
-// 直接 new Repository，也不会直接依赖 AuthNotifier。
+// 同时知道这些具体对象，并通过 Riverpod 把它们连接起来。Login 子模块因此只依赖
+// SessionActivator 抽象；Session 子模块不会反向依赖登录页面、接口或 ViewModel。
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'application/sign_in_use_case.dart';
-import 'auth_providers.dart';
-import 'view_model/auth_view_model.dart';
+import 'login/application/sign_in_use_case.dart';
+import 'login/login_providers.dart';
+import 'session/view_model/auth_view_model.dart';
 
 /// 登录应用用例的依赖注入入口。
 ///

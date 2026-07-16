@@ -1,4 +1,4 @@
-// lib/features/auth/view_model/login_view_model.dart
+// lib/features/auth/login/view_model/login_view_model.dart
 //
 // 作用：登录页 Notifier，负责登录表单校验和登录业务逻辑。
 //
@@ -10,11 +10,11 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../shared/state/async_request_handler.dart';
-import '../../../shared/state/view_state.dart';
-import '../../../shared/localization/user_message.dart';
+import '../../../../shared/state/async_request_handler.dart';
+import '../../../../shared/state/view_state.dart';
+import '../../../../shared/localization/user_message.dart';
 import '../application/sign_in_use_case.dart';
-import '../auth_composition.dart';
+import '../../auth_composition.dart';
 import '../model/login_request.dart';
 
 // ==================== 状态类 ====================

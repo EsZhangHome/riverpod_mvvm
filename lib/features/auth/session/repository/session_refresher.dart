@@ -1,4 +1,4 @@
-// lib/features/auth/repository/session_refresher.dart
+// lib/features/auth/session/repository/session_refresher.dart
 //
 // 底座不知道客户后端使用 refresh_token、SSO Cookie 还是企业 OAuth，因此只
 // 定义“尝试获得新 access token”这一最小能力。具体实现由项目注入，网络拦截器

@@ -1,11 +1,11 @@
-// lib/features/auth/model/login_response.dart
+// lib/features/auth/login/model/login_response.dart
 //
 // 作用：登录响应结果模型，封装登录接口返回的 token 和用户信息。
 // 使用 json_serializable 生成序列化代码，与其他模型保持一致。
 
 import 'package:json_annotation/json_annotation.dart';
 
-import 'user_model.dart';
+import '../../session/model/user_model.dart';
 
 part 'login_response.g.dart';
 

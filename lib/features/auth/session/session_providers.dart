@@ -1,22 +1,13 @@
-// lib/features/auth/auth_providers.dart
+// Session 子模块的依赖组装入口。
 //
-// Auth 模块的 Repository 依赖组装入口。
+// 这里只创建会话刷新与安全持久化能力；登录接口的 Provider 位于
+// auth/login/login_providers.dart，避免两个子模块重新混回同一个文件。
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/providers/service_providers.dart';
-import 'repository/login_repository.dart';
+import '../../../core/providers/service_providers.dart';
 import 'repository/session_refresher.dart';
 import 'repository/session_store.dart';
-
-/// 登录 Repository 的依赖注入入口。
-///
-/// [SignInUseCase] 使用的是 [LoginRepository] 抽象；这里才决定生产实现使用
-/// [LoginRepositoryImpl]，并把全局 [ApiService] 注入进去。用例测试可以替换本
-/// Provider，ViewModel 测试则直接替换更上层的 signInProvider，保持测试职责单一。
-final loginRepositoryProvider = Provider<LoginRepository>((ref) {
-  return LoginRepositoryImpl(ref.watch(apiServiceProvider));
-});
 
 /// Token 刷新能力的注入点。
 ///

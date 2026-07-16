@@ -4,9 +4,9 @@
 // 后续新增 Model 时，可以参考这些写法。
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:riverpod_mvvm/features/auth/model/login_request.dart';
-import 'package:riverpod_mvvm/features/auth/model/login_response.dart';
-import 'package:riverpod_mvvm/features/auth/model/user_model.dart';
+import 'package:riverpod_mvvm/features/auth/login/model/login_request.dart';
+import 'package:riverpod_mvvm/features/auth/login/model/login_response.dart';
+import 'package:riverpod_mvvm/features/auth/session/model/user_model.dart';
 
 void main() {
   group('json serializable models', () {

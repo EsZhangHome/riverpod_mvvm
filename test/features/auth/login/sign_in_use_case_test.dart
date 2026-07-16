@@ -6,13 +6,13 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
-import 'package:riverpod_mvvm/features/auth/application/session_activator.dart';
-import 'package:riverpod_mvvm/features/auth/application/sign_in_use_case.dart';
-import 'package:riverpod_mvvm/features/auth/model/auth_session.dart';
-import 'package:riverpod_mvvm/features/auth/model/login_request.dart';
-import 'package:riverpod_mvvm/features/auth/model/login_response.dart';
-import 'package:riverpod_mvvm/features/auth/model/user_model.dart';
-import 'package:riverpod_mvvm/features/auth/repository/login_repository.dart';
+import 'package:riverpod_mvvm/features/auth/login/application/sign_in_use_case.dart';
+import 'package:riverpod_mvvm/features/auth/login/model/login_request.dart';
+import 'package:riverpod_mvvm/features/auth/login/model/login_response.dart';
+import 'package:riverpod_mvvm/features/auth/login/repository/login_repository.dart';
+import 'package:riverpod_mvvm/features/auth/session/application/session_activator.dart';
+import 'package:riverpod_mvvm/features/auth/session/model/auth_session.dart';
+import 'package:riverpod_mvvm/features/auth/session/model/user_model.dart';
 
 const _response = LoginResponse(
   token: 'token',

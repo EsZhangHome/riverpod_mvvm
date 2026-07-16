@@ -62,8 +62,40 @@ void main() {
     violations.addAll(
       _findInfrastructurePackageBoundaryViolations(projectRoot),
     );
+    violations.addAll(
+      _findAuthSubmoduleBoundaryViolations(dependencies, libRoot, projectRoot),
+    );
     expect(violations, isEmpty, reason: '发现模块依赖越界：\n${violations.join('\n')}');
   });
+}
+
+/// 保证 Auth 内部依赖保持 `login -> session` 单向。
+///
+/// 登录成功必须使用 SessionActivator 建立会话，因此 Login 可以依赖 Session 的稳定
+/// Model/Application 端口；Session 恢复、刷新和退出不应知道登录页面或登录接口。
+/// 根部 auth_composition.dart 可以同时看到两边，负责完成唯一的跨子模块组装。
+List<String> _findAuthSubmoduleBoundaryViolations(
+  List<_LocalDependency> dependencies,
+  String libRoot,
+  String projectRoot,
+) {
+  final authRoot = p.join(libRoot, 'features', 'auth');
+  final loginRoot = p.join(authRoot, 'login');
+  final sessionRoot = p.join(authRoot, 'session');
+  final violations = <String>[];
+
+  for (final dependency in dependencies) {
+    if (!p.isWithin(sessionRoot, dependency.source) ||
+        !p.isWithin(loginRoot, dependency.target)) {
+      continue;
+    }
+    violations.add(
+      '${p.relative(dependency.source, from: projectRoot)} -> '
+      '${p.relative(dependency.target, from: projectRoot)}：'
+      'Session 子模块不能反向依赖 Login 子模块',
+    );
+  }
+  return violations..sort();
 }
 
 /// 保证第三方基础设施插件只存在于明确的适配目录。
@@ -251,7 +283,13 @@ String? _featureRole(String filePath, String libRoot) {
   final segments = p.split(p.relative(filePath, from: libRoot));
   if (segments.length < 4 || segments.first != 'features') return null;
   const roles = {'model', 'repository', 'application', 'view_model', 'view'};
-  return roles.contains(segments[2]) ? segments[2] : null;
+  // 同时兼容 `features/orders/view/...` 和
+  // `features/auth/login/view/...` 两种组织方式。只要 feature 根目录之后出现 MVVM
+  // 角色目录，就按该角色执行依赖方向检查；增加业务切片不能绕过原有架构护栏。
+  for (final segment in segments.skip(2)) {
+    if (roles.contains(segment)) return segment;
+  }
+  return null;
 }
 
 bool _isInfrastructureTarget(String? target, String libRoot) {

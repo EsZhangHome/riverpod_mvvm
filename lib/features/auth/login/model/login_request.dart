@@ -1,4 +1,4 @@
-// lib/features/auth/model/login_request.dart
+// lib/features/auth/login/model/login_request.dart
 //
 // 作用：登录请求参数模型，封装登录接口需要的请求体字段。
 //

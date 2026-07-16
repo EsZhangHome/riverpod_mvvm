@@ -4,11 +4,11 @@
 // 页面 loading、Toast 和输入框属于 LoginNotifier；HTTP 与 JSON 属于 LoginRepository；
 // 安全存储与认证 State 属于 SessionActivator。这里负责按正确顺序协调三者。
 
-import '../../../core/network/request_cancellation.dart';
-import '../model/auth_session.dart';
+import '../../../../core/network/request_cancellation.dart';
+import '../../session/application/session_activator.dart';
+import '../../session/model/auth_session.dart';
 import '../model/login_request.dart';
 import '../repository/login_repository.dart';
-import 'session_activator.dart';
 
 /// 一次登录应用用例的稳定结果。
 enum SignInResult {

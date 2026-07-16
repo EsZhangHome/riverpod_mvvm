@@ -8,10 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/core/network/api_exception.dart';
 import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
-import 'package:riverpod_mvvm/features/auth/application/sign_in_use_case.dart';
+import 'package:riverpod_mvvm/features/auth/login/application/sign_in_use_case.dart';
 import 'package:riverpod_mvvm/features/auth/auth_composition.dart';
-import 'package:riverpod_mvvm/features/auth/model/login_request.dart';
-import 'package:riverpod_mvvm/features/auth/view_model/login_view_model.dart';
+import 'package:riverpod_mvvm/features/auth/login/model/login_request.dart';
+import 'package:riverpod_mvvm/features/auth/login/view_model/login_view_model.dart';
 import 'package:riverpod_mvvm/shared/localization/user_message.dart';
 import 'package:riverpod_mvvm/shared/state/view_state.dart';
 

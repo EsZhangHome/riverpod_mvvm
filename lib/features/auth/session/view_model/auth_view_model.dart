@@ -1,14 +1,14 @@
-// lib/features/auth/view_model/auth_view_model.dart
+// lib/features/auth/session/view_model/auth_view_model.dart
 //
 // App 级认证 ViewModel。它管理“恢复中、未登录、已登录”三种稳定状态，负责把
 // 完整 AuthSession 交给 SessionStore，不直接操作 Keychain 或 SharedPreferences。
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/failure_observer.dart';
-import '../../../core/utils/crash_reporter.dart';
+import '../../../../core/errors/failure_observer.dart';
+import '../../../../core/utils/crash_reporter.dart';
 import '../application/session_activator.dart';
-import '../auth_providers.dart';
+import '../session_providers.dart';
 import '../model/auth_session.dart';
 import '../model/user_model.dart';
 

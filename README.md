@@ -247,8 +247,10 @@ lib/
     storage/                普通偏好与系统安全存储适配器
     utils/                  日志、崩溃上报门面
   features/
-    auth/                   正式认证和会话模块
-      application/          只在跨 Repository/全局能力编排时使用的应用用例与端口
+    auth/                   正式认证领域，对外只通过 auth.dart 暴露能力
+      login/                登录切片：Model、Repository、UseCase、ViewModel、View
+      session/              会话切片：认证状态、安全存储、刷新和网络绑定
+      auth_composition.dart 只负责把登录用例与全局会话端口连接起来
   shared/
     errors/                 技术失败到安全提示文案的转换
     localization/           ViewModel 消息键与按当前 Locale 解析的类型化消息
@@ -267,6 +269,11 @@ lib/
 
 “两个页面都在用”不代表必须放 `shared`。例如用户模型属于认证领域，应保留在 `features/auth`，
 其他模块通过 `auth.dart` 公共入口使用。
+
+Auth 之所以在一个 Feature 内继续分成 `login` 和 `session`，是因为登录已经形成完整的页面业务切片，而会话
+属于 App 级长期状态。依赖保持单向：`login` 可以通过 `SessionActivator` 请求建立会话，`session` 不能反向
+依赖登录页面或登录接口；根部 `auth_composition.dart` 是同时认识两边的唯一组装点。架构测试会同时识别
+`auth/login/view_model` 这类嵌套 MVVM 目录，并阻止 Session 反向依赖 Login。
 
 ## 5. Riverpod 在本项目里怎样使用
 

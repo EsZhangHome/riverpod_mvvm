@@ -203,7 +203,7 @@ authProvider.currentUser.id
 ### 推荐阅读顺序
 
 1. 企业底座 `lib/core/providers/service_providers.dart`
-2. 企业底座 `lib/features/auth/auth_providers.dart`
+2. 企业底座 `lib/features/auth/session/session_providers.dart`
 3. 企业底座 `lib/shared/theme/theme_provider.dart`
 4. Demo `lib/features/mine/view_model/mine_view_model.dart`
 5. Demo `lib/features/mine/view/mine_page.dart`

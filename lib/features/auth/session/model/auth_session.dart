@@ -1,4 +1,4 @@
-// lib/features/auth/model/auth_session.dart
+// lib/features/auth/session/model/auth_session.dart
 //
 // 登录会话必须作为一个整体保存。把 token 和用户分别写入两个存储，会产生
 // “token 已写入、用户写入失败”的半登录状态。

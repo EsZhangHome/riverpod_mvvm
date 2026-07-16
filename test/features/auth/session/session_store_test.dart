@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/core/errors/storage_exception.dart';
 import 'package:riverpod_mvvm/core/storage/secure_storage_service.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
-import 'package:riverpod_mvvm/features/auth/repository/session_store.dart';
+import 'package:riverpod_mvvm/features/auth/session/repository/session_store.dart';
 
 void main() {
   const session = AuthSession(

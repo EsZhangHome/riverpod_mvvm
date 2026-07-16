@@ -1,4 +1,4 @@
-// lib/features/auth/model/user_model.dart
+// lib/features/auth/session/model/user_model.dart
 //
 // 作用：用户数据模型，定义用户的基本信息字段。
 //
