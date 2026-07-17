@@ -1,0 +1,10 @@
+# 当前仓库的默认代码负责人。把底座复制到新组织后，必须替换为真实团队或用户；
+# GitHub 只有在这里列出的账号拥有仓库 write 权限时，才能自动请求 Review。
+* @EsZhangHome
+
+# 高风险目录继续显式列出，便于项目后续替换为架构、安全和发布团队。
+/lib/core/ @EsZhangHome
+/lib/app/bootstrap/ @EsZhangHome
+/.github/workflows/ @EsZhangHome
+/android/ @EsZhangHome
+/ios/ @EsZhangHome

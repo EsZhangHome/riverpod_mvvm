@@ -23,6 +23,11 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - name: Verify localization completeness
+        run: |
+          flutter gen-l10n
+          dart run tool/check_l10n.dart
+          git diff --exit-code -- lib/l10n l10n_untranslated.json
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed lib test integration_test tool
       - name: Verify generated code

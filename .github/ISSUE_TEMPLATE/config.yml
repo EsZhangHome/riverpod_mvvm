@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞（不要公开提交）
+    url: https://github.com/EsZhangHome/riverpod_mvvm/security/advisories/new
+    about: Token 泄露、认证绕过、敏感数据暴露等问题请使用 GitHub Security Advisory 私下报告。
+  - name: 使用和架构文档
+    url: https://github.com/EsZhangHome/riverpod_mvvm#readme
+    about: 提问前请先查看 README、启动流程和企业项目启动指南。

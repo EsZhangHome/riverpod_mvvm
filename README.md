@@ -33,6 +33,10 @@
 
 - [启动、登录和首页完整流程](docs/startup_flow.md)
 - [企业项目启动指南](docs/enterprise_starter.md)
+- [贡献与代码提交约定](CONTRIBUTING.md)
+- [安全漏洞报告规范](SECURITY.md)
+- [第三方依赖与许可证](docs/third_party_licenses.md)
+- [手动 Release Workflow 使用说明](docs/release_workflow.md)
 
 ## 先记住五个词
 
@@ -869,6 +873,7 @@ ApiService 每一层都透传了同一个 `RequestCancellationToken`。不要在
 
 ```bash
 flutter gen-l10n
+dart run tool/check_l10n.dart
 dart run build_runner build
 dart format --output=none --set-exit-if-changed lib test integration_test tool
 flutter analyze
@@ -885,9 +890,13 @@ flutter build apk --release --dart-define-from-file=config/local.json
 flutter build ios --release --no-codesign --dart-define-from-file=config/local.json
 ```
 
-`.github/workflows/ci.yml` 会检查根底座与独立 Demo 的格式、生成代码、静态分析和测试；根测试覆盖率不能
-低于 70%，并会构建 Android Debug APK。单独的 Android 模拟器 Job 会运行全部 `integration_test`：既验证
+`.github/workflows/ci.yml` 会检查根底座的国际化完整性，以及根底座与独立 Demo 的格式、生成代码、静态分析
+和测试；根测试覆盖率不能低于 70%，并会构建 Android Debug APK。单独的 Android 模拟器 Job 会运行全部 `integration_test`：既验证
 “受保护地址 → 登录 → 会话保存 → 安全回跳”和“已有会话直接恢复首页”，也真实读写 Android 安全存储和
 SQLite `app_cache` 表，尽早发现平台通道或数据库迁移问题。
 `android/app/src/main/AndroidManifest.xml` 中的 INTERNET 权限同时覆盖 Debug、Profile 和 Release，避免
 开发包正常、正式包无法请求接口。
+
+仓库还提供 Dependabot、CODEOWNERS、PR/Issue 模板和 Security Policy，这些文件只约束协作流程，不进入
+App 运行包。`.github/workflows/release.yml` 只允许手动触发，默认只生成经过校验的 Android Artifact；接入
+真实项目后，应先按 [Release Workflow 使用说明](docs/release_workflow.md) 配置签名、生产环境审批和发布渠道。

@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # Flutter/Dart 直接依赖和传递依赖由 pub 管理。minor/patch 合并成一个 PR，
+  # major 版本仍单独提交，避免 Riverpod、GoRouter 等破坏性升级被混在一起。
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    groups:
+      pub-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # Actions 只影响仓库流水线，不进入 App 运行包；仍需等待 CI 全绿后再合并。
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:30"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: chore
+      include: scope
