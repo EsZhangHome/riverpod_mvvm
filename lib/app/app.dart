@@ -254,7 +254,9 @@ class _AppViewState extends ConsumerState<_AppView> {
           showInitialConsent: showInitialPrivacyConsent,
           // 隐私 Feature 不直接 import Auth；应用组合层在这里把“拒绝升级”连接到
           // AuthNotifier。logout 会立即清内存状态，GoRouter 自动返回登录页。
-          onDeclineUpgrade: () => ref.read(authProvider.notifier).logout(),
+          onDeclineUpgrade: () => ref
+              .read(authProvider.notifier)
+              .logout(requirePersistentClear: true),
           child: AppNetworkFeedback(
             navigatorKey: _navigatorKey,
             child: child ?? const SizedBox.shrink(),

@@ -315,11 +315,13 @@ final class _DynamicAuditConsent {
   const _DynamicAuditConsent({
     required this.preferencesFile,
     required this.acceptedVersionKey,
+    required this.legacyAcceptedVersionKey,
     required this.currentPolicyVersion,
   });
 
   final String preferencesFile;
   final String acceptedVersionKey;
+  final String legacyAcceptedVersionKey;
   final String currentPolicyVersion;
 }
 
@@ -479,6 +481,10 @@ final class _PrivacyAuditConfig {
       dynamicAuditConsent: _DynamicAuditConsent(
         preferencesFile: _requiredString(dynamicAudit, 'preferencesFile'),
         acceptedVersionKey: _requiredString(dynamicAudit, 'acceptedVersionKey'),
+        legacyAcceptedVersionKey: _requiredString(
+          dynamicAudit,
+          'legacyAcceptedVersionKey',
+        ),
         currentPolicyVersion: _requiredString(
           dynamicAudit,
           'currentPolicyVersion',
@@ -1077,6 +1083,7 @@ final class PrivacyAuditor {
     final expectedValues = <String, String>{
       'preferencesFile': declaration.preferencesFile,
       'acceptedVersionKey': declaration.acceptedVersionKey,
+      'legacyAcceptedVersionKey': declaration.legacyAcceptedVersionKey,
       'currentPolicyVersion': declaration.currentPolicyVersion,
     };
     for (final entry in expectedValues.entries) {

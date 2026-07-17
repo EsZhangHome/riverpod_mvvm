@@ -4,6 +4,8 @@
 // Keychain/Keystore。这样既能验证 ViewModel 的状态流转，也不会把插件实现细节
 // 混入 ViewModel 单元测试。
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
@@ -14,6 +16,7 @@ final class _MemorySessionStore implements SessionStore {
   AuthSession? session;
   Object? readError;
   Object? writeError;
+  Object? clearError;
   var clearCount = 0;
 
   @override
@@ -26,6 +29,39 @@ final class _MemorySessionStore implements SessionStore {
   Future<void> write(AuthSession value) async {
     if (writeError case final error?) throw error;
     session = value;
+  }
+
+  @override
+  Future<void> clear() async {
+    clearCount++;
+    if (clearError case final error?) throw error;
+    session = null;
+  }
+}
+
+final class _PendingSessionRefresher implements SessionRefresher {
+  final Completer<String?> result = Completer<String?>();
+
+  @override
+  Future<String?> refreshAccessToken() => result.future;
+}
+
+final class _PendingReadSessionStore implements SessionStore {
+  final Completer<void> readStarted = Completer<void>();
+  final Completer<AuthSession?> readResult = Completer<AuthSession?>();
+
+  AuthSession? session;
+  var clearCount = 0;
+
+  @override
+  Future<AuthSession?> read() {
+    if (!readStarted.isCompleted) readStarted.complete();
+    return readResult.future;
+  }
+
+  @override
+  Future<void> write(AuthSession session) async {
+    this.session = session;
   }
 
   @override
@@ -119,6 +155,74 @@ void main() {
     expect(store.session, isNull);
     expect(store.clearCount, 1);
   });
+
+  test('logout invalidates an in-flight token refresh', () async {
+    final store = _MemorySessionStore(savedSession);
+    final refresher = _PendingSessionRefresher();
+    final container = ProviderContainer(
+      overrides: [
+        sessionStoreProvider.overrideWithValue(store),
+        sessionRefresherProvider.overrideWithValue(refresher),
+      ],
+    );
+    addTearDown(container.dispose);
+    await _waitForRestoration(container);
+
+    final refresh = container.read(authProvider.notifier).refreshAccessToken();
+    await container.read(authProvider.notifier).logout();
+    refresher.result.complete('late_refreshed_token');
+
+    expect(await refresh, isNull);
+    expect(container.read(authProvider).status, AuthStatus.unauthenticated);
+    expect(store.session, isNull);
+    expect(store.clearCount, 1);
+  });
+
+  test('failed startup restore cannot overwrite a newer login', () async {
+    final store = _PendingReadSessionStore();
+    final container = ProviderContainer(
+      overrides: [sessionStoreProvider.overrideWithValue(store)],
+    );
+    addTearDown(container.dispose);
+
+    // 读取 authProvider 会创建 Notifier；等待 readStarted 可确保启动恢复已经占用存储
+    // 队列，再模拟用户通过新的认证流程建立会话。
+    container.read(authProvider);
+    await store.readStarted.future;
+    final activation = container
+        .read(authProvider.notifier)
+        .activateSession(savedSession);
+    store.readResult.completeError(const FormatException('broken old data'));
+
+    expect(await activation, isTrue);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(authProvider).session, savedSession);
+    expect(store.session, savedSession);
+    expect(store.clearCount, 0);
+  });
+
+  test(
+    'strict logout reports persistent clear failure after one retry',
+    () async {
+      final store = _MemorySessionStore(savedSession)
+        ..clearError = StateError('keychain unavailable');
+      final container = _containerWith(store);
+      addTearDown(container.dispose);
+      await _waitForRestoration(container);
+
+      await expectLater(
+        container
+            .read(authProvider.notifier)
+            .logout(requirePersistentClear: true),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(container.read(authProvider).status, AuthStatus.unauthenticated);
+      expect(store.session, savedSession);
+      expect(store.clearCount, 2);
+    },
+  );
 
   test(
     'invalid persisted session is cleared instead of partially restored',

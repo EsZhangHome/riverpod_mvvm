@@ -167,26 +167,39 @@ class AppWarmupNotifier extends AsyncNotifier<AppWarmupResult?> {
   Future<void> _runPhase(AppWarmupPhase phase) async {
     _runningPhaseCount++;
     state = const AsyncLoading();
-
-    // 只选当前阶段任务。列表为空也算成功完成，后续重复调用不会重新扫描或执行。
-    final tasks = ref
-        .read(appWarmupTasksProvider)
-        .where((task) => task.phase == phase);
-    // 阶段内任务彼此独立并行执行，避免远程配置和更新检查互相排队。
-    // 每个任务内部单独捕获异常，因此 Future.wait 本身不会因单点失败提前结束。
-    final taskIssues = await Future.wait(tasks.map(_runTask));
-    _issues.addAll(taskIssues.whereType<AppWarmupIssue>());
-    _runningPhaseCount--;
-    if (!ref.mounted || _runningPhaseCount > 0) return;
-
-    state = AsyncData(
-      AppWarmupResult(
-        issues: List.unmodifiable(
-          <AppWarmupIssue>[..._issues]
-            ..sort((left, right) => left.task.compareTo(right.task)),
+    try {
+      // 只选当前阶段任务。列表为空也算成功完成，后续重复调用不会重新扫描或执行。
+      final tasks = ref
+          .read(appWarmupTasksProvider)
+          .where((task) => task.phase == phase);
+      // 阶段内任务彼此独立并行执行，避免远程配置和更新检查互相排队。
+      // 每个任务内部单独捕获异常，因此 Future.wait 本身不会因单点失败提前结束。
+      final taskIssues = await Future.wait(tasks.map(_runTask));
+      _issues.addAll(taskIssues.whereType<AppWarmupIssue>());
+    } catch (error, stackTrace) {
+      // 注册表通常只是一个 List，但真实项目可能通过 Provider 动态组装。若组装逻辑
+      // 自身抛错，也必须遵守“预热失败不阻塞 App”的约定，不能让状态永久 AsyncLoading。
+      CrashReporter.report(error, stackTrace);
+      _issues.add(
+        AppWarmupIssue(
+          task: 'registry.${phase.name}',
+          error: error,
+          stackTrace: stackTrace,
         ),
-      ),
-    );
+      );
+    } finally {
+      _runningPhaseCount--;
+      if (ref.mounted && _runningPhaseCount == 0) {
+        state = AsyncData(
+          AppWarmupResult(
+            issues: List.unmodifiable(
+              <AppWarmupIssue>[..._issues]
+                ..sort((left, right) => left.task.compareTo(right.task)),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<AppWarmupIssue?> _runTask(AppWarmupTask task) async {

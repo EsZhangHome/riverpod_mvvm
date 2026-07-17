@@ -319,6 +319,7 @@
   "dynamicAuditConsent": {
     "preferencesFile": "FlutterSharedPreferences",
     "acceptedVersionKey": "flutter.privacy_consent_record_v1",
+    "legacyAcceptedVersionKey": "flutter.privacy_policy_accepted_version",
     "currentPolicyVersion": "starter-1",
     "unknownPhasePolicy": "block_candidate"
   }

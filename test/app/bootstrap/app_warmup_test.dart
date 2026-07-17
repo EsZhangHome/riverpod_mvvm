@@ -117,6 +117,33 @@ void main() {
     expect(state.value?.issues.single.task, 'broken_sdk');
   });
 
+  test(
+    'task registry failure is collected instead of leaving loading state',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          appWarmupTasksProvider.overrideWith((ref) {
+            throw StateError('invalid project warmup registration');
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(appWarmupProvider.notifier)
+          .startPhase(AppWarmupPhase.afterSessionReady);
+
+      final state = container.read(appWarmupProvider);
+      expect(state.isLoading, isFalse);
+      expect(state.hasError, isFalse);
+      expect(state.value?.issues.single.task, 'registry.afterSessionReady');
+      expect(
+        state.value?.issues.single.error.toString(),
+        contains('invalid project warmup registration'),
+      );
+    },
+  );
+
   test('hung task times out without blocking warmup completion', () async {
     final container = ProviderContainer(
       overrides: [

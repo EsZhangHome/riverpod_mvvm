@@ -18,9 +18,10 @@ const _currentPolicy = PrivacyPolicyConfig(
 /// 跨模块验收用例：隐私 Feature 只发出选择结果，MyApp 负责连接 Auth 和 GoRouter。
 /// Fake Store 让测试从“已经登录的详情页”开始，不访问真实安全存储。
 final class _MemorySessionStore implements SessionStore {
-  _MemorySessionStore(this.session);
+  _MemorySessionStore(this.session, {this.clearError});
 
   AuthSession? session;
+  final Object? clearError;
   var clearCount = 0;
 
   @override
@@ -32,6 +33,7 @@ final class _MemorySessionStore implements SessionStore {
   @override
   Future<void> clear() async {
     clearCount++;
+    if (clearError case final error?) throw error;
     session = null;
   }
 }
@@ -236,5 +238,51 @@ void main() {
     expect(find.byKey(const ValueKey('privacy.dialog')), findsNothing);
     // 保留旧版本，才能让下次冷启动继续识别为“政策升级”而不是“首次安装”。
     expect(privacyRepository.acceptedVersion, '2025.01.01');
+  });
+
+  testWidgets('拒绝升级但安全会话清理失败时保持弹窗并允许重试', (tester) async {
+    const session = AuthSession(
+      token: 'test-token',
+      user: UserModel(id: '1', name: 'Tester', email: 't@example.test'),
+    );
+    final sessionStore = _MemorySessionStore(
+      session,
+      clearError: StateError('keychain unavailable'),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          privacyPolicyConfigProvider.overrideWithValue(_currentPolicy),
+          privacyConsentRepositoryProvider.overrideWithValue(
+            _OldPrivacyRepository(),
+          ),
+          sessionStoreProvider.overrideWithValue(sessionStore),
+          appWarmupTasksProvider.overrideWithValue(const []),
+        ],
+        child: MyApp(
+          routeBundle: AppRouteBundle(
+            authenticatedHome: '/home',
+            routes: [
+              GoRoute(
+                path: '/home',
+                builder: (context, state) => const Scaffold(
+                  body: Text('home page', key: ValueKey('route.home')),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('privacy.decline')));
+    await tester.pumpAndSettle();
+
+    expect(sessionStore.clearCount, 2);
+    expect(sessionStore.session, session);
+    expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
+    expect(find.byKey(const ValueKey('privacy.saveError')), findsOneWidget);
   });
 }

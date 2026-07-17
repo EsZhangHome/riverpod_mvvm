@@ -149,11 +149,11 @@ class AppRouteBundle {
   /// ```dart
   /// loginPath: '/sso-login',
   /// loginBuilder: (context, state) => SsoLoginPage(
-  ///   onSubmit: () async {
+  ///   onSubmit: (agreementSelected) async {
   ///     // 默认 LoginPage 已自动执行这一步；替换登录页后由项目显式保留。
   ///     if (!await requestPrivacyConsentBeforeLogin(
   ///       context,
-  ///       agreementSelected: state.agreementSelected,
+  ///       agreementSelected: agreementSelected,
   ///     )) return;
   ///     await submitSsoLogin();
   ///   },

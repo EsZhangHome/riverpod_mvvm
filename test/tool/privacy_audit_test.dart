@@ -171,6 +171,37 @@ void main() {
       ),
     );
   });
+
+  test('动态脚本旧版同意 key 与配置不一致时会阻断', () async {
+    final hook = File(
+      p.join(project.path, 'tool', 'privacy', 'android_privacy_hooks.js'),
+    );
+    hook.writeAsStringSync(
+      hook.readAsStringSync().replaceFirst(
+        "legacyAcceptedVersionKey: 'flutter.privacy_policy_accepted_version'",
+        "legacyAcceptedVersionKey: 'flutter.wrong_legacy_key'",
+      ),
+    );
+
+    final result = await PrivacyAuditor(_options(project)).run();
+
+    expect(
+      result.findings,
+      contains(
+        isA<AuditFinding>()
+            .having(
+              (finding) => finding.ruleId,
+              'ruleId',
+              'dynamic_privacy_hook_config_mismatch',
+            )
+            .having(
+              (finding) => finding.evidence,
+              'evidence',
+              'legacyAcceptedVersionKey',
+            ),
+      ),
+    );
+  });
 }
 
 PrivacyAuditOptions _options(
@@ -224,7 +255,8 @@ void deleteAccount() {}
   hook.parent.createSync(recursive: true);
   hook.writeAsStringSync('''
 preferencesFile: 'FlutterSharedPreferences'
-acceptedVersionKey: 'flutter.privacy_policy_accepted_version'
+acceptedVersionKey: 'flutter.privacy_consent_record_v1'
+legacyAcceptedVersionKey: 'flutter.privacy_policy_accepted_version'
 currentPolicyVersion: 'test-1'
 ''');
 
@@ -273,7 +305,8 @@ currentPolicyVersion: 'test-1'
       },
       'dynamicAuditConsent': <String, String>{
         'preferencesFile': 'FlutterSharedPreferences',
-        'acceptedVersionKey': 'flutter.privacy_policy_accepted_version',
+        'acceptedVersionKey': 'flutter.privacy_consent_record_v1',
+        'legacyAcceptedVersionKey': 'flutter.privacy_policy_accepted_version',
         'currentPolicyVersion': 'test-1',
       },
     }),

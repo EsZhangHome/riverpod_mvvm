@@ -77,6 +77,8 @@ flutter test
 
 `AppWarmupTask.phase` 决定任务在哪个阶段运行；同一阶段只执行一次，阶段内任务彼此独立并行。失败只记录
 `AppWarmupIssue`，不能把已经显示的登录页或首页切回错误页。
+任务注册表的项目组装逻辑如果抛错，会被记录为 `registry.<phase>` 并正常结束加载，不会让预热状态永久
+停在 `AsyncLoading`；这不代表可以忽略配置错误，监控与测试仍应处理对应 issue。
 两个 Warmup 阶段还会等待当前隐私政策版本被同意；政策升级弹窗未处理或已拒绝时，尚未开始的任务不会运行。
 SQLite 由 `appDatabaseProvider` 延迟到第一次 CRUD，完全不用数据库的项目不会增加这段启动耗时。
 
@@ -243,6 +245,10 @@ class ProjectSessionRefresher implements SessionRefresher {
 旧版 `auth_token + current_user` 迁移，迁移成功或退出登录后会清除旧数据。新项目不要再用
 SharedPreferences 保存 token，也不要在登录页源码中放默认账号或密码。
 
+恢复、登录、刷新和退出共用串行存储队列与会话版本号。这样用户退出后，尚未完成的刷新不能把旧账号重新
+写回；新的登录也不会被迟到的启动恢复覆盖。普通退出在内存中立即生效并重试持久清理一次；政策升级拒绝
+采用严格清理，Keychain/Keystore 连续失败时保留遮挡弹窗并允许用户重试。
+
 ## 8. 普通偏好、插件边界与异常链路
 
 业务代码通过 `preferencesStoreProvider` 获取 `PreferencesStore`，不要直接调用静态 `LocalStorage`。
@@ -275,7 +281,8 @@ Presenter；登录页不再创建 showDialog。这条规则同时
 覆盖“用户第一次登录，但安装的新版本正好升级了隐私政策”的边界，不会出现两层 Dialog。
 
 存在旧版本时由 `PrivacyConsentHost` 在业务 Navigator 上方弹出升级说明：同意后保留当前路由；拒绝时保持
-弹窗遮挡，等待退出登录和安全存储清理完成后再关闭，本次进程不重复弹出，下次启动继续提醒。普通退出登录不删除同意记录。首次拒绝不再
+弹窗遮挡，等待退出登录和安全存储清理完成后再关闭；清理重试后仍失败会保留弹窗并提示重试。本次进程不重复
+弹出，下次启动继续提醒。普通退出登录不删除同意记录。首次拒绝不再
 主动终止 Android 或 iOS 进程，因此底座没有隐私专用 MethodChannel；两端都只关闭弹窗并留在登录页。项目
 接入时必须同时替换 `ENV_PRIVACY_POLICY_URL`、`ENV_USER_AGREEMENT_URL`、授权版本
 `ENV_PRIVACY_POLICY_VERSION`、两份正文版本 `ENV_PRIVACY_POLICY_DOCUMENT_VERSION` 与

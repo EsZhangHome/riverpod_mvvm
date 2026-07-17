@@ -53,6 +53,8 @@ dart run tool/privacy/privacy_audit.dart --mode development
 - `nativePlugins`：最终会注册到 Android 的插件、已复核版本、用途和数据类型。
 - `approvedFindings`：已经逐行确认的特殊调用及理由。
 - `releaseRequirements`：隐私政策环境键、同意门禁和账号注销的代码标记。
+- `dynamicAuditConsent`：Frida 脚本读取的 SharedPreferences 文件、结构化记录 key、旧版兼容 key 和当前
+  授权版本；审计器会逐项校验脚本常量，任何不一致都会阻断。
 
 白名单不是“看到报错就加进去”。正确流程是：
 
@@ -138,6 +140,8 @@ Wi-Fi 标识、剪贴板、应用列表和广告 ID 等入口。
 `ENV_PRIVACY_POLICY_VERSION` 一致。脚本会在每次敏感调用时重新读取
 `FlutterSharedPreferences` 中的 `privacy_consent_record_v1` JSON，并兼容旧版单字符串 key，所以同一次进程里
 点击同意后，后续日志会自动切换到 `post_consent`。
+`compliance/privacy_audit.json` 中的 `acceptedVersionKey`、`legacyAcceptedVersionKey` 和
+`currentPolicyVersion` 必须与脚本顶部常量同步；日常审计会自动检查这三项，项目升级存储 key 时不要只改一边。
 
 准备专用测试设备并按 Frida 官方方式启动匹配版本的 `frida-server` 后执行：
 
