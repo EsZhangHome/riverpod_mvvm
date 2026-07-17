@@ -417,8 +417,8 @@ ref.invalidate(appDatabaseProvider);
 1. `LoginPage` 用 `ref.watch(loginProvider)` 显示 loading 和按钮状态，用 `ref.listen` 消费一次性 Toast。
 2. 点击按钮后用 `ref.read(loginProvider.notifier).login(...)` 发命令。
 3. `LoginNotifier` 先校验表单，再调用抽象的 `SignIn` 应用用例。
-4. `SignInUseCase` 调用 `LoginRepository`；Repository 根据环境选择 Mock 或 `ApiService`，并透传
-   `RequestCancellationToken`。
+4. `SignInUseCase` 调用抽象 `LoginRepository`。默认 `RemoteLoginRepository` 使用 `ApiService` 并透传
+   `RequestCancellationToken`；Starter 开发模式通过 Provider override 注入独立 Mock 实现。
 5. `ApiClient` 加入 baseUrl、Token、requestId、重试和 401 处理。
 6. `ResponseAdapter` 解释 `{code, message, data}`，Repository 把 data 转成 `LoginResponse`。
 7. `SignInUseCase` 把 Token 和用户组成一份 `AuthSession`，再交给抽象 `SessionActivator`。
@@ -785,7 +785,8 @@ flutter test
 
 1. 将 `main.dart` 的 `app/starter/starter.dart` import 替换为项目路由文件。
 2. 将 `createStarterRouteBundle()` 替换为 `createProjectRouteBundle()`。
-3. 删除 `lib/app/starter/` 和对应的 `test/app/starter/`。
+3. 移除 `rootBuilder: buildStarterRoot`，或者替换为项目自己的 ProviderScope 组合。
+4. 删除 `lib/app/starter/` 和对应的 `test/app/starter/`；Starter Mock 会随目录一起删除。
 
 不需要修改 AppRouter、路由守卫、RoutePaths、认证模块或 CI。保留 Starter 时，正式构建会包含这个已注册的
 占位路由；因此真实项目接入首页后推荐删除，而不是长期随正式 App 发布。Starter 的中英文占位文案也保存在

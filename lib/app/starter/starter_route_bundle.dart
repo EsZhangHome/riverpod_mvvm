@@ -25,8 +25,8 @@ abstract final class StarterRoutePaths {
 /// - authenticatedHome 会被通用认证守卫自动保护，因此这里无需重复声明。
 ///
 /// 本函数故意不做成 `AppRouteBundle.starter()`：如果工厂留在通用路由契约中，
-/// AppRouteBundle 就必须长期认识占位页面。现在 main.dart 是唯一组合点，替换成本项目
-/// 的 `createProjectRouteBundle()` 后，整个 starter 目录可以直接删除。
+/// AppRouteBundle 就必须长期认识占位页面。现在 main.dart 只通过 Starter 公共入口
+/// 获得路由和开发依赖组合；替换成项目实现后，整个 starter 目录可以直接删除。
 AppRouteBundle createStarterRouteBundle() {
   return AppRouteBundle(
     authenticatedHome: StarterRoutePaths.home,

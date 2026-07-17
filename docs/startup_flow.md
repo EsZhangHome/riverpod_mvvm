@@ -15,7 +15,10 @@
 
 ```dart
 Future<void> main() {
-  return runApplication(createStarterRouteBundle());
+  return runApplication(
+    createStarterRouteBundle(),
+    rootBuilder: buildStarterRoot,
+  );
 }
 ```
 
@@ -27,6 +30,8 @@ Future<void> main() {
 ```
 
 它表达的是“如果最终确认已经登录，默认去哪里”，不是“现在立刻打开 Starter”。
+`buildStarterRoot` 则只负责开发配置下通过 Provider override 注入 Starter Mock 登录；
+真实 `RemoteLoginRepository` 内部不读取 Mock 开关。两者都保存在可整体删除的 Starter 组件中。
 
 ## 2. runApplication 只做同步运行时准备
 

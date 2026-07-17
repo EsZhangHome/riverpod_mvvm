@@ -215,8 +215,8 @@ class EnvConfig {
 
   /// 是否启用 Mock 数据模式。
   ///
-  /// - true：Repository 返回模拟数据，不发起真实网络请求（开发/演示阶段使用）
-  /// - false：Repository 调用真实后端接口
+  /// - true：应用组合层可通过 Provider override 注入模拟数据实现；
+  /// - false：不注入 Mock，使用 Provider 默认的真实后端实现。
   ///
   /// 通过 --dart-define 切换：
   /// ```bash

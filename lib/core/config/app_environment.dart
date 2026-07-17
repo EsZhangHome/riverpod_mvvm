@@ -81,7 +81,7 @@ class EnvironmentConfig {
   /// 完整用户协议的公开绝对地址；正式环境必须使用 HTTPS 且不能是模板域名。
   final String userAgreementUrl;
 
-  /// 是否允许 Repository 选择本地 Mock 数据；正式或 release 包必须关闭。
+  /// 是否允许应用组合层注入本地 Mock 数据；正式或 release 包必须关闭。
   final bool enableMock;
 
   /// 是否允许默认 DebugLogSink 输出调试日志；正式包必须关闭。

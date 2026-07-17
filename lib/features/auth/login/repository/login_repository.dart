@@ -1,14 +1,11 @@
 // lib/features/auth/login/repository/login_repository.dart
 //
-// 作用：登录数据仓库，负责执行登录请求并返回登录结果。
-//
-// Mock 开关：通过 EnvConfig.enableMock 控制，`flutter run --dart-define=ENV_ENABLE_MOCK=false` 切换到真实接口。
+// 作用：声明登录数据仓库契约，并提供只访问真实后端的默认实现。
 //
 // 登录数据流：
-// SignInUseCase -> LoginRepository.login -> Mock 或 ApiService
+// SignInUseCase -> LoginRepository.login -> ApiService
 // -> LoginResponse -> SignInUseCase -> SessionActivator 建立会话。
 
-import '../../../../core/config/env_config.dart';
 import '../../../../core/network/api_service.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/network/request_cancellation.dart';
@@ -31,48 +28,22 @@ abstract class LoginRepository {
   });
 }
 
-/// 根据编译环境在 Mock 与真实接口之间切换的 Repository 实现。
-class LoginRepositoryImpl implements LoginRepository {
-  /// 创建真实/Mock 可切换的登录仓库。
+/// 只调用真实登录接口的默认 Repository。
+///
+/// 本类不读取 EnvConfig，也不知道 Mock 是否开启。开发期模拟数据由 Starter 自己的
+/// StarterMockLoginRepository 实现，并在应用组合层通过 loginRepositoryProvider
+/// override 注入。这样真实仓库只有“调用后端并解释结果”一个变化原因。
+class RemoteLoginRepository implements LoginRepository {
+  /// 创建真实登录仓库。
   ///
-  /// [_apiService] 由 Provider 注入。即使当前编译环境开启 Mock 也仍注入该依赖，
-  /// 这样关闭 Mock 后无需改对象结构，单元测试也能稳定替换网络端口。
-  LoginRepositoryImpl(this._apiService);
+  /// [_apiService] 由 Provider 注入，因此单元测试可以替换网络端口，不会发真实请求。
+  RemoteLoginRepository(this._apiService);
 
   /// 网络抽象，只负责发送请求和解析统一响应，不包含页面或认证状态。
   final ApiService _apiService;
 
   @override
   Future<LoginResponse> login(
-    LoginRequest request, {
-    RequestCancellationToken? cancelToken,
-  }) async {
-    // 步骤 1：开发环境走可重复运行的本地 Mock，不依赖后端。
-    if (EnvConfig.enableMock) {
-      return _mockLogin(request);
-    }
-    // 步骤 2：关闭 Mock 后走真实接口，并继续传递取消令牌。
-    return _apiLogin(request, cancelToken: cancelToken);
-  }
-
-  Future<LoginResponse> _mockLogin(LoginRequest request) async {
-    // 模拟网络耗时，让页面仍能演示 overlay loading。
-    await Future<void>.delayed(const Duration(milliseconds: 600));
-    // 仍通过 fromJson 构造，确保 Mock 与真实接口复用同一解析路径。
-    return LoginResponse.fromJson({
-      'token': 'mock_token_${DateTime.now().millisecondsSinceEpoch}',
-      'user': {
-        'id': '1',
-        'name': request.account.contains('@') ? 'Flutter User' : 'Mobile User',
-        'email': request.account.contains('@')
-            ? request.account
-            : 'user@example.com',
-        'avatarUrl': null,
-      },
-    });
-  }
-
-  Future<LoginResponse> _apiLogin(
     LoginRequest request, {
     RequestCancellationToken? cancelToken,
   }) async {

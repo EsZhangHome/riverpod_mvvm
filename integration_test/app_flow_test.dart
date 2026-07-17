@@ -20,10 +20,6 @@ import 'package:riverpod_mvvm/core/network/network_status_service.dart';
 import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import 'package:riverpod_mvvm/core/providers/service_providers.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
-import 'package:riverpod_mvvm/features/auth/login/login_providers.dart';
-import 'package:riverpod_mvvm/features/auth/login/model/login_request.dart';
-import 'package:riverpod_mvvm/features/auth/login/model/login_response.dart';
-import 'package:riverpod_mvvm/features/auth/login/repository/login_repository.dart';
 import 'package:riverpod_mvvm/features/privacy_consent/privacy_consent.dart';
 
 const _homePath = '/integration-home';
