@@ -104,9 +104,14 @@ class LoginNotifier extends Notifier<LoginState> {
   /// 按钮禁用和 AsyncRequestHandler 双重拦截。
   Future<void> login(String account, String password) async {
     // 步骤 1：同步校验在发请求前完成，减少无意义的 Repository 调用。
-    // 分开判断可以让 Toast 准确告诉用户当前缺少哪一项；两项都为空时先提示账号，
-    // 用户补充账号再次提交后，再提示密码，符合表单从上到下的填写顺序。
+    // 分开判断可以让 Toast 准确告诉用户当前缺少哪一项；两项都为空时一次说明全部
+    // 必填内容，避免用户补完手机号后再次提交才知道还需要密码。
     switch (LoginInputRules.firstIssue(account, password)) {
+      case LoginInputIssue.accountAndPasswordRequired:
+        _publishError(
+          const UserMessage.localized(UserMessageKey.enterAccountAndPassword),
+        );
+        return;
       case LoginInputIssue.accountRequired:
         _publishError(const UserMessage.localized(UserMessageKey.enterAccount));
         return;

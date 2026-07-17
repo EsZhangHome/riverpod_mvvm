@@ -208,13 +208,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get userAgreementName => 'User Agreement';
 
   @override
-  String get account => 'Phone or email';
+  String get account => 'Phone number';
 
   @override
   String get password => 'Password';
 
   @override
-  String get enterAccount => 'Enter your phone number or email';
+  String get enterAccountAndPassword => 'Enter your phone number and password';
+
+  @override
+  String get enterAccount => 'Enter your phone number';
 
   @override
   String get enterPassword => 'Enter your password';

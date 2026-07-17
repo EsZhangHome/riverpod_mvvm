@@ -15,6 +15,7 @@ import '../../l10n/app_localizations.dart';
 /// 2. 在所有 ARB 文件增加同名文案；
 /// 3. 在 [UserMessage.resolve] 的 switch 中建立映射。
 enum UserMessageKey {
+  enterAccountAndPassword,
   enterAccount,
   enterPassword,
   requestTimeout,
@@ -66,6 +67,7 @@ final class UserMessage {
     if (text != null) return text;
 
     return switch (_key!) {
+      UserMessageKey.enterAccountAndPassword => strings.enterAccountAndPassword,
       UserMessageKey.enterAccount => strings.enterAccount,
       UserMessageKey.enterPassword => strings.enterPassword,
       UserMessageKey.requestTimeout => strings.requestTimeout,

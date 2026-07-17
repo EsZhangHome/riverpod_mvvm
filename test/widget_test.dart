@@ -195,7 +195,7 @@ void main() {
         find.byKey(const ValueKey('login.submit')),
       );
       expect(
-        find.text(AppLocalizations.of(loginContext).enterAccount),
+        find.text(AppLocalizations.of(loginContext).enterAccountAndPassword),
         findsNothing,
       );
 
@@ -205,7 +205,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(
-        find.text(AppLocalizations.of(loginContext).enterAccount),
+        find.text(AppLocalizations.of(loginContext).enterAccountAndPassword),
         findsOneWidget,
       );
       expect(find.byType(TextField), findsNWidgets(2));

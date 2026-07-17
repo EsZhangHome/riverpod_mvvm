@@ -14,11 +14,26 @@ void main() {
 
     expect(
       message.resolve(lookupAppLocalizations(const Locale('zh'))),
-      '请输入手机号或邮箱',
+      '请输入手机号',
     );
     expect(
       message.resolve(lookupAppLocalizations(const Locale('en'))),
-      'Enter your phone number or email',
+      'Enter your phone number',
+    );
+  });
+
+  test('combined login prompt resolves with the current locale', () {
+    const message = UserMessage.localized(
+      UserMessageKey.enterAccountAndPassword,
+    );
+
+    expect(
+      message.resolve(lookupAppLocalizations(const Locale('zh'))),
+      '请输入手机号和密码',
+    );
+    expect(
+      message.resolve(lookupAppLocalizations(const Locale('en'))),
+      'Enter your phone number and password',
     );
   });
 

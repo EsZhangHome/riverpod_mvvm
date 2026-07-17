@@ -201,13 +201,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get userAgreementName => '《用户协议》';
 
   @override
-  String get account => '手机号/邮箱';
+  String get account => '手机号';
 
   @override
   String get password => '密码';
 
   @override
-  String get enterAccount => '请输入手机号或邮箱';
+  String get enterAccountAndPassword => '请输入手机号和密码';
+
+  @override
+  String get enterAccount => '请输入手机号';
 
   @override
   String get enterPassword => '请输入密码';

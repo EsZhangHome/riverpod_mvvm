@@ -59,7 +59,7 @@ void main() {
     expect(notifier.state.viewState, ViewState.success);
   });
 
-  test('empty input fails before calling sign-in use case', () async {
+  test('empty account and password publish the combined prompt', () async {
     final signIn = _FakeSignIn();
     final container = _createContainer(signIn);
     addTearDown(container.dispose);
@@ -69,7 +69,10 @@ void main() {
 
     expect(signIn.callCount, 0);
     expect(notifier.state.viewState, ViewState.idle);
-    expect(notifier.state.feedbackMessage?.key, UserMessageKey.enterAccount);
+    expect(
+      notifier.state.feedbackMessage?.key,
+      UserMessageKey.enterAccountAndPassword,
+    );
     expect(notifier.state.feedbackId, 1);
   });
 
@@ -116,6 +119,18 @@ void main() {
     await notifier.login(' user@example.com ', ' pass word ');
     expect(signIn.receivedRequest?.account, 'user@example.com');
     expect(signIn.receivedRequest?.password, ' pass word ');
+  });
+
+  test('account is validated separately when password is present', () async {
+    final signIn = _FakeSignIn();
+    final container = _createContainer(signIn);
+    addTearDown(container.dispose);
+    final notifier = container.read(loginProvider.notifier);
+
+    await notifier.login('  ', '123456');
+
+    expect(notifier.state.feedbackMessage?.key, UserMessageKey.enterAccount);
+    expect(signIn.callCount, 0);
   });
 
   test('session activation failure becomes typed storage feedback', () async {

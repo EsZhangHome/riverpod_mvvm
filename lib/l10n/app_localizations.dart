@@ -437,7 +437,7 @@ abstract class AppLocalizations {
   /// No description provided for @account.
   ///
   /// In zh, this message translates to:
-  /// **'手机号/邮箱'**
+  /// **'手机号'**
   String get account;
 
   /// No description provided for @password.
@@ -446,10 +446,16 @@ abstract class AppLocalizations {
   /// **'密码'**
   String get password;
 
+  /// No description provided for @enterAccountAndPassword.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入手机号和密码'**
+  String get enterAccountAndPassword;
+
   /// No description provided for @enterAccount.
   ///
   /// In zh, this message translates to:
-  /// **'请输入手机号或邮箱'**
+  /// **'请输入手机号'**
   String get enterAccount;
 
   /// No description provided for @enterPassword.
