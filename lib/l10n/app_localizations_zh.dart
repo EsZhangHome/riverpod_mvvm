@@ -97,6 +97,74 @@ class AppLocalizationsZh extends AppLocalizations {
       '你可以拒绝并停留在登录页。正式项目还必须提供撤回同意、更正、删除、注销账号和投诉渠道。';
 
   @override
+  String get privacyCenterTitle => '隐私中心';
+
+  @override
+  String get privacyCenterIntroduction =>
+      '你可以在这里查看当前协议版本、历史授权记录和数据处理摘要，也可以随时打开完整政策或撤回授权。';
+
+  @override
+  String get privacyCenterStatusTitle => '当前授权状态';
+
+  @override
+  String get privacyCenterStatusAccepted => '已同意当前版本';
+
+  @override
+  String get privacyCenterStatusOutdated => '已同意的版本已过期，需要重新确认';
+
+  @override
+  String get privacyCenterStatusNotAccepted => '尚未同意当前版本';
+
+  @override
+  String privacyCenterAcceptedVersion(String version) {
+    return '历史同意版本：$version';
+  }
+
+  @override
+  String privacyCenterAcceptedAt(String time) {
+    return '同意时间：$time';
+  }
+
+  @override
+  String get privacyCenterAcceptedAtUnknown => '旧版记录未保存时间';
+
+  @override
+  String get privacyCenterDisclosureTitle => '我们如何处理信息';
+
+  @override
+  String get privacyCenterDocumentsTitle => '完整协议文档';
+
+  @override
+  String get privacyCenterRevokeTitle => '撤回隐私授权';
+
+  @override
+  String get privacyCenterRevokeDescription =>
+      '撤回后会停止放行尚未启动的授权能力、清除当前授权记录并退出登录。已经初始化的三方 SDK 还必须由真实项目按厂商文档停止采集，必要时提示重新启动 App。';
+
+  @override
+  String get privacyCenterRevokeAction => '撤回授权并退出登录';
+
+  @override
+  String get privacyCenterRevokeConfirmTitle => '确认撤回隐私授权？';
+
+  @override
+  String get privacyCenterRevokeConfirmBody =>
+      '撤回后当前账号会退出，下一次登录前需要重新阅读并同意当前协议。';
+
+  @override
+  String get privacyCenterRevokeConfirmAction => '确认撤回';
+
+  @override
+  String get privacyCenterRevokeSucceeded => '隐私授权已撤回';
+
+  @override
+  String get privacyCenterRevokeFailed =>
+      '授权记录或登录会话清理失败，请重试。当前进程不会继续按已授权状态放行新能力。';
+
+  @override
+  String get cancel => '取消';
+
+  @override
   String get agreeAndContinue => '同意并继续';
 
   @override

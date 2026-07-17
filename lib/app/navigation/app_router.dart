@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/auth.dart';
+import '../../features/privacy_consent/privacy_consent.dart';
 import '../../shared/navigation/route_paths.dart';
 import '../../shared/ui/loading_view.dart';
 import 'app_route_bundle.dart';
@@ -30,6 +31,8 @@ class AppRouter {
   /// - [defaultLoginBuilder]：App 组合层提供的默认登录页工厂。底座 MyApp 用它给
   ///   LoginPage 注入隐私登录前置检查；项目显式设置 routeBundle.loginBuilder 时，
   ///   项目的自定义登录页优先，并需要自行执行相同的合规前置流程。
+  /// - [privacyCenterBuilder]：App 组合层提供的隐私中心工厂，用于注入“撤回授权后
+  ///   严格退出登录”的跨 Feature 动作；省略时仍提供只读隐私中心。
   ///
   /// AppRouter 构造时就创建 [config]。调用方应在 StatefulWidget 生命周期内只构造
   /// 一次，并在 dispose 时释放 [config]，不能在每次 build 中重新创建。
@@ -40,12 +43,15 @@ class AppRouter {
     GlobalKey<NavigatorState>? navigatorKey,
     Widget Function(BuildContext context, GoRouterState state)?
     defaultLoginBuilder,
+    Widget Function(BuildContext context, GoRouterState state)?
+    privacyCenterBuilder,
   }) : config = _createRouter(
          refreshListenable,
          guards,
          routeBundle,
          navigatorKey,
          defaultLoginBuilder,
+         privacyCenterBuilder,
        );
 
   /// 已完成底座路由和业务路由组装的 GoRouter 实例。
@@ -62,6 +68,8 @@ class AppRouter {
     GlobalKey<NavigatorState>? navigatorKey,
     Widget Function(BuildContext context, GoRouterState state)?
     defaultLoginBuilder,
+    Widget Function(BuildContext context, GoRouterState state)?
+    privacyCenterBuilder,
   ) {
     return GoRouter(
       // 不能在 build 中重新创建这个 key，否则导航栈和根 Overlay 都会丢失。
@@ -97,6 +105,14 @@ class AppRouter {
         GoRoute(
           path: RoutePaths.sessionRestoring,
           builder: (context, state) => const Scaffold(body: LoadingView()),
+        ),
+        // 隐私中心属于所有项目都需要的公开基础页面。登录前后都允许查看，因此它不
+        // 加入 AuthRouteGuard 的保护名单；撤回授权的跨模块动作由 MyApp builder 注入。
+        GoRoute(
+          path: RoutePaths.privacyCenter,
+          builder:
+              privacyCenterBuilder ??
+              (context, state) => const PrivacyCenterPage(),
         ),
 
         // 展开入口提供的路由组件。默认 Starter 和真实项目使用完全相同的组合方式。

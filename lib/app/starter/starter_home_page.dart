@@ -5,10 +5,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/config/env_config.dart';
 import '../../features/auth/auth.dart';
 import '../../shared/theme/app_spacing.dart';
+import '../../shared/navigation/route_paths.dart';
 import 'starter_strings.dart';
 
 /// 登录成功后的占位首页，同时提供退出入口验证完整认证生命周期。
@@ -40,6 +42,14 @@ class StarterHomePage extends ConsumerWidget {
                 Text(user.name, style: Theme.of(context).textTheme.titleMedium),
               ],
               const SizedBox(height: AppSpacing.xl),
+              OutlinedButton.icon(
+                // 隐私中心是底座公共公开路由。真实项目删除 Starter 后，只需在自己的
+                // 设置/关于页面继续导航到同一路径，不需要复制隐私状态或页面代码。
+                onPressed: () => context.push(RoutePaths.privacyCenter),
+                icon: const Icon(Icons.privacy_tip_outlined),
+                label: Text(strings.privacyCenter),
+              ),
+              const SizedBox(height: AppSpacing.sm),
               OutlinedButton.icon(
                 // read 只发送一次退出命令，不订阅 Notifier 对象本身。
                 onPressed: () => ref.read(authProvider.notifier).logout(),

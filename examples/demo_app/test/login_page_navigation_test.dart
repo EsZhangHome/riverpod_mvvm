@@ -5,11 +5,33 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_mvvm/app/app.dart';
+import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
+import 'package:riverpod_mvvm/features/auth/auth.dart';
 import 'package:riverpod_mvvm_demo/demo_route_bundle.dart';
 import 'package:riverpod_mvvm_demo/navigation/demo_route_paths.dart';
 import 'package:riverpod_mvvm_demo/localization/demo_strings.dart';
 import 'package:riverpod_mvvm/core/storage/local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// 页面导航测试只验证登录后的路由闭环，不连接真实后端。
+final class _SuccessfulLoginRepository implements LoginRepository {
+  const _SuccessfulLoginRepository();
+
+  @override
+  Future<LoginResponse> login(
+    LoginRequest request, {
+    RequestCancellationToken? cancelToken,
+  }) async {
+    return const LoginResponse(
+      token: 'demo-test-token',
+      user: UserModel(
+        id: 'demo-test-user',
+        name: 'Demo Tester',
+        email: 'demo@example.com',
+      ),
+    );
+  }
+}
 
 void main() {
   testWidgets('login success navigates to main page', (tester) async {
@@ -19,8 +41,22 @@ void main() {
     await LocalStorage.init();
 
     await tester.pumpWidget(
-      ProviderScope(child: MyApp(routeBundle: createDemoRouteBundle())),
+      ProviderScope(
+        overrides: [
+          loginRepositoryProvider.overrideWithValue(
+            const _SuccessfulLoginRepository(),
+          ),
+        ],
+        child: MyApp(routeBundle: createDemoRouteBundle()),
+      ),
     );
+    await tester.pumpAndSettle();
+
+    // 首次安装没有历史授权记录，登录页上方会先显示底座唯一隐私 Dialog。先明确
+    // 同意，验证 Demo 没有绕过与正式项目相同的隐私门禁；同意只选中协议，不会在
+    // 空表单上提前触发账号密码校验。
+    expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('privacy.accept')));
     await tester.pumpAndSettle();
 
     // Act 1：像真实用户一样输入测试值。生产登录页不在源码中预填任何凭据。

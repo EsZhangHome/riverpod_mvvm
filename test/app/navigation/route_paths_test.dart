@@ -8,5 +8,6 @@ void main() {
   test('route paths contain only universal framework infrastructure', () {
     expect(RoutePaths.login, '/login');
     expect(RoutePaths.sessionRestoring, '/session-restoring');
+    expect(RoutePaths.privacyCenter, '/privacy-center');
   });
 }

@@ -99,6 +99,76 @@ class AppLocalizationsEn extends AppLocalizations {
       'You may decline and remain on sign-in. A real project must also provide withdrawal, correction, deletion, account closure, and complaint channels.';
 
   @override
+  String get privacyCenterTitle => 'Privacy center';
+
+  @override
+  String get privacyCenterIntroduction =>
+      'Review the current agreement versions, previous consent record, and data-handling summary. You can also open the full documents or withdraw consent at any time.';
+
+  @override
+  String get privacyCenterStatusTitle => 'Current consent status';
+
+  @override
+  String get privacyCenterStatusAccepted => 'Current version accepted';
+
+  @override
+  String get privacyCenterStatusOutdated =>
+      'The accepted version is outdated and requires confirmation';
+
+  @override
+  String get privacyCenterStatusNotAccepted => 'Current version not accepted';
+
+  @override
+  String privacyCenterAcceptedVersion(String version) {
+    return 'Previously accepted version: $version';
+  }
+
+  @override
+  String privacyCenterAcceptedAt(String time) {
+    return 'Accepted at: $time';
+  }
+
+  @override
+  String get privacyCenterAcceptedAtUnknown =>
+      'The legacy record did not store a time';
+
+  @override
+  String get privacyCenterDisclosureTitle => 'How information is processed';
+
+  @override
+  String get privacyCenterDocumentsTitle => 'Full agreement documents';
+
+  @override
+  String get privacyCenterRevokeTitle => 'Withdraw privacy consent';
+
+  @override
+  String get privacyCenterRevokeDescription =>
+      'Withdrawal prevents consent-protected capabilities that have not started, removes the current consent record, and signs you out. A real project must also stop already initialized SDK collection according to vendor guidance and require an app restart when necessary.';
+
+  @override
+  String get privacyCenterRevokeAction => 'Withdraw consent and sign out';
+
+  @override
+  String get privacyCenterRevokeConfirmTitle => 'Withdraw privacy consent?';
+
+  @override
+  String get privacyCenterRevokeConfirmBody =>
+      'Your current account will be signed out. You must review and accept the current agreements before signing in again.';
+
+  @override
+  String get privacyCenterRevokeConfirmAction => 'Withdraw';
+
+  @override
+  String get privacyCenterRevokeSucceeded => 'Privacy consent withdrawn';
+
+  @override
+  String get privacyCenterRevokeFailed =>
+      'The consent record or sign-in session could not be cleared. Try again. This process will not treat the app as consented when starting new capabilities.';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
   String get agreeAndContinue => 'Agree and continue';
 
   @override

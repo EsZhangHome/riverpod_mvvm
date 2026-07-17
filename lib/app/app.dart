@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/config/env_config.dart';
+import '../core/errors/failure_observer.dart';
 import '../features/auth/auth.dart';
 import '../features/privacy_consent/privacy_consent.dart';
 import '../l10n/app_localizations.dart';
@@ -132,6 +133,12 @@ class _AppViewState extends ConsumerState<_AppView> {
           ),
         },
       ),
+      // 隐私中心属于 Privacy Feature，但“撤回后退出哪种登录会话、回到哪个登录页”
+      // 只有 App 组合层知道。通过回调连接两边，Privacy 与 Auth 不会互相 import。
+      privacyCenterBuilder: (context, state) => PrivacyCenterPage(
+        onRevokeConsent: _revokePrivacyConsentAndLogout,
+        onRevokeCompleted: () => _router.go(widget.routeBundle.loginPath),
+      ),
     ).config;
 
     // fireImmediately 先把 restoring 快照交给回调；它只刷新守卫，不会启动 Warmup。
@@ -188,6 +195,26 @@ class _AppViewState extends ConsumerState<_AppView> {
       agreement.setSelected(true);
     }
     _scheduleWarmupWhenAllowed();
+  }
+
+  /// 撤回授权后严格清理当前登录会话。
+  ///
+  /// 顺序不能反过来：PrivacyConsentNotifier.revoke 会先在内存中立即停止放行，再删除
+  /// 磁盘记录；成功后才退出登录并清理安全存储。安全存储两次清理仍失败时返回 false，
+  /// 隐私中心保留错误和重试入口，同时当前进程依旧不会按“已授权”启动新能力。
+  Future<bool> _revokePrivacyConsentAndLogout() async {
+    final revoked = await ref.read(privacyConsentProvider.notifier).revoke();
+    if (!revoked || !mounted) return false;
+
+    try {
+      await ref
+          .read(authProvider.notifier)
+          .logout(requirePersistentClear: true);
+      return mounted;
+    } catch (error, stackTrace) {
+      FailureObserver.reportIfNeeded(error, stackTrace);
+      return false;
+    }
   }
 
   /// 同时满足“界面时机”和“已同意当前政策”后才启动对应 Warmup 阶段。

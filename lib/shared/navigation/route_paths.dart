@@ -10,12 +10,14 @@
 // 路由结构：
 // /login            → 登录页
 // /session-restoring → 安全会话恢复页
+// /privacy-center    → 隐私中心（公开页面，登录前后都可查看）
 
 /// 路由路径集中管理。
 ///
 /// 底座内置路由结构：
 /// /login            → 登录页
 /// /session-restoring → 只在读取安全会话期间显示的内部页面
+/// /privacy-center    → 隐私政策、用户协议、授权记录与撤回入口
 class RoutePaths {
   const RoutePaths._();
 
@@ -27,4 +29,11 @@ class RoutePaths {
   /// 这个地址不是原生启动图，也不是 BootstrapGate。BootstrapGate 完成环境校验和
   /// 普通存储初始化后，GoRouter 才使用本页面等待 SecureStorage 会话恢复。
   static const String sessionRestoring = '/session-restoring';
+
+  /// 底座公共隐私中心。
+  ///
+  /// 该页面必须保持公开：用户在登录前也应能查看完整政策，退出登录后同样可以返回
+  /// 查看。真实项目可以在设置页、关于页或登录页添加入口，但不要重复注册另一条
+  /// 隐私状态来源；页面始终读取 App 级 privacyConsentProvider。
+  static const String privacyCenter = '/privacy-center';
 }

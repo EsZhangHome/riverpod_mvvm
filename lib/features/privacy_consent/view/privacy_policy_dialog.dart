@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../model/privacy_consent_state.dart';
+import 'privacy_disclosure_summary.dart';
 
 /// 首次授权与政策升级共同使用的隐私政策弹窗内容。
 ///
@@ -142,26 +143,8 @@ final class _PrivacyPolicyDialogState extends State<PrivacyPolicyDialog> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      _DisclosureItem(
-                        icon: Icons.account_circle_outlined,
-                        title: strings.privacyDisclosureDataTitle,
-                        body: strings.privacyDisclosureDataBody,
-                      ),
-                      _DisclosureItem(
-                        icon: Icons.fact_check_outlined,
-                        title: strings.privacyDisclosurePurposeTitle,
-                        body: strings.privacyDisclosurePurposeBody,
-                      ),
-                      _DisclosureItem(
-                        icon: Icons.extension_outlined,
-                        title: strings.privacyDisclosureThirdPartyTitle,
-                        body: strings.privacyDisclosureThirdPartyBody,
-                      ),
-                      _DisclosureItem(
-                        icon: Icons.manage_accounts_outlined,
-                        title: strings.privacyDisclosureRightsTitle,
-                        body: strings.privacyDisclosureRightsBody,
-                      ),
+                      const PrivacyDisclosureSummary(),
+                      const SizedBox(height: 12),
                       Wrap(
                         alignment: WrapAlignment.center,
                         children: [
@@ -259,45 +242,5 @@ final class _PrivacyPolicyDialogState extends State<PrivacyPolicyDialog> {
       _isOpeningDocument = false;
       _openDocumentFailed = !opened;
     });
-  }
-}
-
-/// 显著告知中的一项摘要。
-///
-/// 完整法律文本仍在外部政策页；这里用短句告诉用户最关键的处理范围，避免只放一个
-/// “请阅读隐私政策”链接。真实项目应结合业务修改对应本地化文案和完整政策。
-final class _DisclosureItem extends StatelessWidget {
-  const _DisclosureItem({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  final IconData icon;
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 2),
-                Text(body, style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

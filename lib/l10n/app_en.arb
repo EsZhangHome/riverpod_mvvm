@@ -44,6 +44,36 @@
   "privacyDisclosureThirdPartyBody": "Consent-protected deferred capabilities do not start before acceptance. A real project must list its actual permissions, SDKs, shared data, and purposes in the full policy.",
   "privacyDisclosureRightsTitle": "Your choices and rights",
   "privacyDisclosureRightsBody": "You may decline and remain on sign-in. A real project must also provide withdrawal, correction, deletion, account closure, and complaint channels.",
+  "privacyCenterTitle": "Privacy center",
+  "privacyCenterIntroduction": "Review the current agreement versions, previous consent record, and data-handling summary. You can also open the full documents or withdraw consent at any time.",
+  "privacyCenterStatusTitle": "Current consent status",
+  "privacyCenterStatusAccepted": "Current version accepted",
+  "privacyCenterStatusOutdated": "The accepted version is outdated and requires confirmation",
+  "privacyCenterStatusNotAccepted": "Current version not accepted",
+  "privacyCenterAcceptedVersion": "Previously accepted version: {version}",
+  "@privacyCenterAcceptedVersion": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  },
+  "privacyCenterAcceptedAt": "Accepted at: {time}",
+  "@privacyCenterAcceptedAt": {
+    "placeholders": {
+      "time": {"type": "String"}
+    }
+  },
+  "privacyCenterAcceptedAtUnknown": "The legacy record did not store a time",
+  "privacyCenterDisclosureTitle": "How information is processed",
+  "privacyCenterDocumentsTitle": "Full agreement documents",
+  "privacyCenterRevokeTitle": "Withdraw privacy consent",
+  "privacyCenterRevokeDescription": "Withdrawal prevents consent-protected capabilities that have not started, removes the current consent record, and signs you out. A real project must also stop already initialized SDK collection according to vendor guidance and require an app restart when necessary.",
+  "privacyCenterRevokeAction": "Withdraw consent and sign out",
+  "privacyCenterRevokeConfirmTitle": "Withdraw privacy consent?",
+  "privacyCenterRevokeConfirmBody": "Your current account will be signed out. You must review and accept the current agreements before signing in again.",
+  "privacyCenterRevokeConfirmAction": "Withdraw",
+  "privacyCenterRevokeSucceeded": "Privacy consent withdrawn",
+  "privacyCenterRevokeFailed": "The consent record or sign-in session could not be cleared. Try again. This process will not treat the app as consented when starting new capabilities.",
+  "cancel": "Cancel",
   "agreeAndContinue": "Agree and continue",
   "agreeAndContinueUsing": "Agree and keep using",
   "declineAndLogout": "Decline and sign out",

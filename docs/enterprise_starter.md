@@ -72,6 +72,7 @@ flutter test
 | 创建 MyApp 前 | 恢复隐私版本；首次无记录时清除残留安全会话 | `PrivacyConsentGate` |
 | 业务 Navigator 上方 | 首次自动授权、登录再次触发与任意页面政策升级的统一覆盖 | `PrivacyConsentHost` |
 | 登录请求发出前 | 读取协议勾选状态，未勾选时请求弹窗并阻止越过授权 | `requestPrivacyConsentBeforeLogin` |
+| 登录前后随时查看 | 展示授权版本、完整协议和撤回入口 | `/privacy-center` |
 | MyApp 第一帧后 | 崩溃监控等需要尽早工作的旁路能力 | `AppWarmupPhase.afterFirstFrame` |
 | 会话恢复和目标页首帧后 | 远程配置、更新检查、统计 SDK | `AppWarmupPhase.afterSessionReady` |
 | 第一次使用 | SQLite、地图、支付等功能专用重能力 | 对应 Provider |
@@ -82,6 +83,16 @@ flutter test
 停在 `AsyncLoading`；这不代表可以忽略配置错误，监控与测试仍应处理对应 issue。
 两个 Warmup 阶段还会等待当前隐私政策版本被同意；政策升级弹窗未处理或已拒绝时，尚未开始的任务不会运行。
 SQLite 由 `appDatabaseProvider` 延迟到第一次 CRUD，完全不用数据库的项目不会增加这段启动耗时。
+
+需要授权的三方 SDK 不要把厂商 `initialize()` 直接注册为 WarmupTask。项目应为每个 SDK 实现
+`PrivacyProtectedSdkAdapter`，再由 `PrivacyProtectedSdkInitializer` 在执行瞬间核对 Riverpod 当前授权版本并
+生成 `PrivacyConsentProof`。Android/iOS Adapter 必须把 proof 中的 `consentVersion` 交给原生侧再次校验后才
+初始化厂商 SDK，同时关闭 Application、ContentProvider、AppDelegate 中的自动初始化。底座只定义稳定契约，
+不提供没有真实 SDK 参数的空 MethodChannel。
+
+底座公共隐私中心使用 `/privacy-center`，未登录也允许访问。真实项目只需在设置或关于页面跳转到
+`RoutePaths.privacyCenter`；不要复制页面或增加新的 `acceptedPrivacy` 布尔值。撤回动作由 MyApp 组合
+Privacy 与 Auth：先撤回记录、再严格清理安全会话，成功后使用当前 AppRouteBundle.loginPath 返回登录页。
 
 项目级 Provider 替换从统一入口传入：
 

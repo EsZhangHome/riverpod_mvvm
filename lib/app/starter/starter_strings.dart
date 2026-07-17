@@ -11,10 +11,17 @@ import 'package:flutter/widgets.dart';
 /// Starter 只有两个短句，不值得单独建立第二套 gen-l10n 生成工程。正式业务页面仍应
 /// 使用根 ARB；这个手写类只服务于可删除占位组件，并在删除组件时一并移除。
 class StarterStrings {
-  const StarterStrings._({required this.message, required this.logout});
+  const StarterStrings._({
+    required this.message,
+    required this.privacyCenter,
+    required this.logout,
+  });
 
   /// 占位首页的说明文字。
   final String message;
+
+  /// 打开底座公共隐私中心的按钮文字。
+  final String privacyCenter;
 
   /// 退出登录按钮文字。
   final String logout;
@@ -28,6 +35,7 @@ class StarterStrings {
     if (languageCode == 'zh') {
       return const StarterStrings._(
         message: '企业项目底座已启动。请用第一个业务 Feature 替换此页面。',
+        privacyCenter: '隐私中心',
         logout: '退出登录',
       );
     }
@@ -35,6 +43,7 @@ class StarterStrings {
       message:
           'The enterprise starter is ready. '
           'Replace this page with your first business feature.',
+      privacyCenter: 'Privacy center',
       logout: 'Log out',
     );
   }
