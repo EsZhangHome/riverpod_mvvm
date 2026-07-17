@@ -47,6 +47,9 @@ examples/demo_app/
     riverpod_learning_path.md  # 基础 -> 异步 -> 全局详细学习路径
   lib/
     main.dart                  # 学习应用入口，Release 模式拒绝运行
+    app/
+      demo_composition.dart    # Demo 组合根；按配置注入本地或真实登录仓库
+      demo_mock_login_repository.dart # 只属于 Demo 的离线登录实现
     demo_route_bundle.dart     # 与底座 AppRouteBundle 的唯一组合点
     localization/             # 所有案例文案
     navigation/               # 案例路径与 StatefulShellRoute 外壳
@@ -150,6 +153,10 @@ flutter build apk --debug --dart-define-from-file=config/development.json
 
 测试通过 `ProviderContainer.overrides` 替换 Repository 或平台 Service，不访问真实网络。
 `HomeBanner` 的 `*.g.dart` 属于当前应用，由当前应用自己的 build_runner 负责生成。
+
+`ENV_ENABLE_MOCK=true` 只在 `lib/app/demo_composition.dart` 的应用组合根中生效：它会把
+`loginRepositoryProvider` 替换为 `DemoMockLoginRepository`。如果改为 `false`，登录会访问
+`ENV_API_BASE_URL`，此时必须把 `example.com` 占位地址替换为真实后端地址。
 
 ## 8. 删除
 

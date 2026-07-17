@@ -6,6 +6,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:riverpod_mvvm/riverpod_mvvm.dart';
 
+import 'app/demo_composition.dart';
 import 'demo_route_bundle.dart';
 
 Future<void> main() async {
@@ -13,5 +14,7 @@ Future<void> main() async {
   if (kReleaseMode) {
     throw UnsupportedError('教学应用不能用于正式发布，请构建仓库根目录的企业底座。');
   }
-  await runApplication(createDemoRouteBundle());
+  // rootBuilder 是 Demo 的依赖组合根。开发配置在这里注入本地登录仓库，避免
+  // api.example.com 等文档占位地址被误当成真实服务；关闭 Mock 后才访问正式接口。
+  await runApplication(createDemoRouteBundle(), rootBuilder: buildDemoRoot);
 }
