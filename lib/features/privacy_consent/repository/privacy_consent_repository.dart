@@ -19,8 +19,8 @@ abstract interface class PrivacyConsentRepository {
 /// SharedPreferences 中隐私模块拥有的稳定 key。
 ///
 /// shared_preferences Android 旧接口会给 Dart 逻辑 key 自动增加 `flutter.` 前缀。
-/// 动态审计脚本因此读取 `flutter.privacy_consent_record_v1`，并从 JSON 中取得
-/// consentVersion；修改 key 时必须同步更新 compliance 与 Frida 配置。
+/// 底层 shared_preferences 会在原生存储中自动为 key 增加 `flutter.` 前缀，但
+/// Dart 业务代码始终只使用这里声明的不带前缀名称，不应在其他模块重复写字符串。
 abstract final class PrivacyConsentStorageKeys {
   /// 当前结构化记录。单个 JSON 值避免多个字段分别写入造成半成功状态。
   static const acceptedRecordV1 = 'privacy_consent_record_v1';

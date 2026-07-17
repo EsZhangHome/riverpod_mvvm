@@ -338,13 +338,9 @@ dart run build_runner build
 flutter analyze
 flutter test --coverage
 dart run tool/check_coverage.dart --minimum 70
-dart run tool/privacy/privacy_audit.dart --mode development
 flutter test integration_test -d <device-id> --dart-define-from-file=config/local.json
 flutter build apk --release --dart-define-from-file=config/local.json
 flutter build ios --release --no-codesign --dart-define-from-file=config/local.json
-dart run tool/privacy/privacy_audit.dart --mode release \
-  --environment-file config/local.json \
-  --apk build/app/outputs/flutter-apk/app-release.apk
 ```
 
 同时人工确认：
@@ -360,18 +356,13 @@ dart run tool/privacy/privacy_audit.dart --mode release \
 `.github/workflows/ci.yml` 默认执行：
 
 1. Flutter 3.44.0 安装与依赖恢复。
-2. 隐私合规 development 审计，阻断未登记插件、权限和明确敏感 API。
-3. Dart 格式校验。
-4. build_runner 生成并检查仓库无差异。
-5. `flutter analyze`。
-6. `flutter test --coverage`，并执行 70% 最低覆盖率门禁。
-7. Debug APK 构建。
-8. 独立 Demo 的格式、生成代码、静态分析和测试；删除 Demo 目录后该 Job 自动跳过。
-9. Android 模拟器运行关键 App 集成流程，并真实冒烟验证安全存储与 SQLite 迁移。
+2. Dart 格式校验。
+3. build_runner 生成并检查仓库无差异。
+4. `flutter analyze`。
+5. `flutter test --coverage`，并执行 70% 最低覆盖率门禁。
+6. Debug APK 构建。
+7. 独立 Demo 的格式、生成代码、静态分析和测试；删除 Demo 目录后该 Job 自动跳过。
+8. Android 模拟器运行关键 App 集成流程，并真实冒烟验证安全存储与 SQLite 迁移。
 
 团队可在此基础上提高覆盖率阈值，增加 Sonar、依赖漏洞扫描、签名 release 构建与分发平台上传；这些步骤
 依赖组织账号和密钥，因此不在通用底座中硬编码。
-
-隐私审计规则和 SDK/权限/域名白名单位于 `compliance/privacy_audit.json`；真实项目发布前还要对最终
-Release APK 执行严格模式。配置方法、动态调用观察和工具边界见
-[开发阶段隐私合规自检](privacy_self_audit.md)。

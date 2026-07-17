@@ -11,7 +11,7 @@
 ## 大纲导航
 
 第一次接触项目建议依次阅读 1～8；准备接入真实业务时重点阅读 9～11；维护底座或准备发布时阅读
-12～15。点击下面的章节名称可以直接跳转：
+12～14。点击下面的章节名称可以直接跳转：
 
 - [先记住五个词](#先记住五个词)：先分清 View、ViewModel、Repository、Service 和 Provider。
 - [1. 运行项目](#1-运行项目)：安装依赖、创建本地配置并启动 App。
@@ -28,13 +28,11 @@
 - [12. 注释怎么读，哪些文件不要手改](#12-注释怎么读哪些文件不要手改)：理解参数注释和生成代码边界。
 - [13. 常见问题](#13-常见问题)：启动、登录、请求取消、状态刷新和数据库问题。
 - [14. 提交前验证](#14-提交前验证)：格式、生成代码、分析、测试和发布构建命令。
-- [15. 开发阶段隐私合规自检](#15-开发阶段隐私合规自检)：检查敏感 API、SDK、权限、域名和 Release APK。
 
 配套文档：
 
 - [启动、登录和首页完整流程](docs/startup_flow.md)
 - [企业项目启动指南](docs/enterprise_starter.md)
-- [开发阶段隐私合规自检](docs/privacy_self_audit.md)
 
 ## 先记住五个词
 
@@ -875,7 +873,6 @@ dart format --output=none --set-exit-if-changed lib test integration_test tool
 flutter analyze
 flutter test --coverage
 dart run tool/check_coverage.dart --minimum 70
-dart run tool/privacy/privacy_audit.dart --mode development
 # 需要已启动的 Android/iOS 模拟器或真机
 flutter test integration_test -d <device-id> --dart-define-from-file=config/local.json
 ```
@@ -893,37 +890,3 @@ flutter build ios --release --no-codesign --dart-define-from-file=config/local.j
 SQLite `app_cache` 表，尽早发现平台通道或数据库迁移问题。
 `android/app/src/main/AndroidManifest.xml` 中的 INTERNET 权限同时覆盖 Debug、Profile 和 Release，避免
 开发包正常、正式包无法请求接口。
-
-## 15. 开发阶段隐私合规自检
-
-项目自带的隐私审计器只属于开发工具，不被 `lib/` 引用，也不会编译进正式 App。它会读取最终 Android
-原生插件解析结果，并检查源码敏感 API、插件版本、合并前权限、运行期域名和发布所需资料：
-
-```bash
-flutter pub get
-dart run tool/privacy/privacy_audit.dart --mode development
-```
-
-报告写入 `build/reports/privacy-audit.md` 和 `build/reports/privacy-audit.json`。默认出现未登记插件、
-未登记/禁止权限、Android ID 或 IMEI 等 `blocker` 时返回非零，现有 CI 会阻止合并；隐私政策地址、
-同意门禁等必须由真实项目填写的内容，在 development 模式标为待确认。
-
-提审前要扫描真正准备发布的 APK，而不是只检查源码：
-
-```bash
-flutter build apk --release --dart-define-from-file=config/local.json
-dart run tool/privacy/privacy_audit.dart \
-  --mode release \
-  --environment-file config/local.json \
-  --apk build/app/outputs/flutter-apk/app-release.apk
-```
-
-规则和白名单位于 `compliance/privacy_audit.json`。其中 `dynamicAuditConsent` 同时声明结构化记录 key、
-旧版本兼容 key 和当前政策版本；审计器会校验它们与 Frida 脚本完全一致，避免工具因配置漂移把同意阶段判断
-错误。新增 SDK、权限或域名时，必须先确认必要性和真实数据
-行为，再登记用途；不能为了让 CI 变绿而机械放行。真机阶段还可以使用
-`tool/privacy/android_privacy_hooks.js` 观察敏感 API 的实际调用时机和调用栈，脚本不会输出标识符返回值。
-
-完整配置说明、Frida 使用方式、测试覆盖场景和工具边界见
-[开发阶段隐私合规自检](docs/privacy_self_audit.md)。脚本通过只是研发风险门禁通过，不等于自动取得法律
-或应用市场合规结论。
