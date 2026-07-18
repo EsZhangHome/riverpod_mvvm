@@ -7,7 +7,9 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_mvvm/core/config/env_config.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
+import 'package:riverpod_mvvm/features/privacy_consent/privacy_consent.dart';
 
+import '../features/privacy_demo/privacy_demo.dart';
 import 'demo_mock_login_repository.dart';
 
 /// 为 [runApplication] 创建的根 Widget 安装 Demo 级 ProviderScope。
@@ -24,6 +26,11 @@ Widget buildDemoRoot(Widget child) {
         loginRepositoryProvider.overrideWithValue(
           const DemoMockLoginRepository(),
         ),
+      // Demo 只替换“当前政策配置”的来源。底座的授权 Repository、状态机和全局
+      // Dialog Host 全部保持正式实现，所以模拟升级能真实验证完整业务链路。
+      privacyPolicyConfigProvider.overrideWith(
+        (ref) => ref.watch(demoPrivacyPolicyConfigProvider),
+      ),
     ],
     child: child,
   );

@@ -24,6 +24,7 @@ import '../../../navigation/demo_route_paths.dart';
 import 'package:riverpod_mvvm/shared/theme/app_spacing.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
 import 'package:riverpod_mvvm/shared/theme/theme_provider.dart';
+import '../../privacy_demo/privacy_demo.dart';
 import '../view_model/mine_view_model.dart';
 
 class MinePage extends ConsumerWidget {
@@ -126,6 +127,8 @@ class MinePage extends ConsumerWidget {
             icon: const Icon(Icons.refresh),
             label: const Text(DemoStrings.reloadAppInfo),
           ),
+          const SizedBox(height: AppSpacing.lg),
+          const PrivacyUpgradeDemoCard(),
           const SizedBox(height: AppSpacing.sm),
           FilledButton.tonalIcon(
             onPressed: () => _logout(context, ref),

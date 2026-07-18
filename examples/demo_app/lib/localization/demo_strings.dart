@@ -149,7 +149,7 @@ class DemoStrings {
   static const String globalLearningDataFlow =
       'Service / Storage → App 级或服务 Provider → MaterialApp / GoRouter / 页面 Consumer';
   static const String globalLearningInteraction =
-      '切换全局主题、刷新 App 信息、观察网络流、退出登录；确认跨页面共享与用户切换后的状态清理。';
+      '切换全局主题、刷新 App 信息、观察网络流、模拟隐私协议升级、退出登录；确认跨页面共享与用户切换后的状态清理。';
   static const String globalLearningCodeEntry =
       'features/auth/auth.dart + shared/theme/theme_provider.dart → demo/features/mine/view_model → view';
   static const String appNotifierTitle = 'App 级 NotifierProvider';
@@ -181,6 +181,17 @@ class DemoStrings {
   static const String connectionVpn = 'VPN';
   static const String connectionOther = '其他网络';
   static const String connectionNone = '未连接';
+  static const String privacyUpgradeSimulationTitle = '隐私协议升级模拟';
+  static const String privacyUpgradeSimulationDescription =
+      '修改 Demo 的 App 级政策配置，复用底座正式的版本比较、全局弹窗、持久化和拒绝退出流程。';
+  static const String noAcceptedPrivacyPolicy = '暂无';
+  static const String simulatePrivacyPolicyUpgrade = '模拟隐私协议升级';
+
+  static String currentPrivacyPolicyVersion(String version) =>
+      '当前要求版本：$version';
+
+  static String acceptedPrivacyPolicyVersion(String version) =>
+      '历史同意版本：$version';
 
   static String currentConnection(String type) =>
       '当前连接：$type\n连接状态来自 StreamProvider';

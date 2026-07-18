@@ -57,6 +57,7 @@ examples/demo_app/
       home/                    # 同步状态、购物车和页面请求生命周期
       orders/                  # AsyncNotifier、分页、family、Stream
       mine/                    # App 级 Provider 与平台 Service
+      privacy_demo/            # 运行时模拟政策升级，复用底座全局隐私流程
       learning/                # 基础 -> 异步 -> 全局学习中心
       profile/                 # ViewState 与 AsyncRequestHandler
   test/                        # 只测试当前学习应用的案例
@@ -140,6 +141,8 @@ View
 5. 企业底座 `lib/shared/theme/theme_provider.dart`
 
 重点观察 App 级登录态、主题持久化、平台 Service Provider、测试 override 和路由刷新桥接。
+“我的”页还提供隐私协议升级模拟：它只覆盖当前政策配置 Provider，版本比较、弹窗、保存、
+拒绝后退出登录仍执行企业底座正式代码，可用于验证运行中政策升级场景。
 
 ## 7. 测试与代码生成
 

@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:riverpod_mvvm/app/app.dart';
 import 'package:riverpod_mvvm/core/network/request_cancellation.dart';
 import 'package:riverpod_mvvm/features/auth/auth.dart';
+import 'package:riverpod_mvvm/features/privacy_consent/privacy_consent.dart';
 import 'package:riverpod_mvvm_demo/demo_route_bundle.dart';
+import 'package:riverpod_mvvm_demo/features/privacy_demo/privacy_demo.dart';
 import 'package:riverpod_mvvm_demo/navigation/demo_route_paths.dart';
 import 'package:riverpod_mvvm_demo/localization/demo_strings.dart';
 import 'package:riverpod_mvvm/core/storage/local_storage.dart';
@@ -45,6 +47,9 @@ void main() {
         overrides: [
           loginRepositoryProvider.overrideWithValue(
             const _SuccessfulLoginRepository(),
+          ),
+          privacyPolicyConfigProvider.overrideWith(
+            (ref) => ref.watch(demoPrivacyPolicyConfigProvider),
           ),
         ],
         child: MyApp(routeBundle: createDemoRouteBundle()),
@@ -89,6 +94,28 @@ void main() {
 
     await tester.tap(find.text(DemoStrings.mine));
     await tester.pumpAndSettle();
+    expect(find.text(DemoStrings.mineTitle), findsOneWidget);
+
+    // Demo 只改变政策配置 Provider；全局 Host 应通过真实版本比较立即弹出升级 Dialog。
+    final simulateUpgrade = find.byKey(
+      const ValueKey('demo.simulatePrivacyUpgrade'),
+    );
+    await tester.dragUntilVisible(
+      simulateUpgrade,
+      find.byType(ListView).last,
+      const Offset(0, -300),
+    );
+    // ensureVisible 调整了 ScrollPosition；等待新布局后按钮中心才进入测试视口。
+    await tester.pumpAndSettle();
+    await tester.tap(simulateUpgrade);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('privacy.dialog')), findsOneWidget);
+    expect(find.text(DemoStrings.mineTitle), findsOneWidget);
+
+    // 同意升级后保存新版本并关闭 Dialog，当前“我的”页面和登录会话保持不变。
+    await tester.tap(find.byKey(const ValueKey('privacy.accept')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('privacy.dialog')), findsNothing);
     expect(find.text(DemoStrings.mineTitle), findsOneWidget);
 
     // 学习说明从业务 Tab 正文移出，只通过“我的”右上角独立入口进入。
